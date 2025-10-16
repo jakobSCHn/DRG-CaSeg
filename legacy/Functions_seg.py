@@ -4,7 +4,6 @@ Created on Tue Apr 22 13:44:04 2025
 
 @author: Junxuan Ma
 """
-import cv2
 import glob
 import czifile
 import numpy as np
