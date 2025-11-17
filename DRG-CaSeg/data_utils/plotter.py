@@ -1,8 +1,13 @@
 import numpy as np
+import logging
 import matplotlib.pyplot as plt
 
+from scipy.ndimage import label
+from skimage.measure import find_contours
+from scipy.stats import zscore
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
 
 def plot_frame(
     vid: np.ndarray,
@@ -170,3 +175,186 @@ def plot_spatial_patterns(
 
     fig.tight_layout()
     plt.savefig(filename)
+
+
+def save_colored_contour_plot(master_neuron_mask, 
+                              background_image, 
+                              save_filepath, 
+                              dpi=300, 
+                              cmap_name='gist_rainbow'):
+    """
+    Generates a contour plot of all ROIs on a background image,
+    where each independent ROI (neuron) has a unique color, 
+    and saves it to a file.
+
+    Args:
+        master_neuron_mask (np.ndarray): 2D boolean array of detected neurons.
+        background_image (np.ndarray): 2D grayscale background image for context.
+        save_filepath (str): The full path (including filename) to save the plot.
+                               (e.g., "C:/results/my_plot.png" or "./neuron_contours.png")
+        dpi (int): Dots per inch for the saved image quality.
+        cmap_name (str): The matplotlib colormap to use for unique colors.
+                         'gist_rainbow' or 'tab20' are good choices.
+    """
+    
+    # 1. Find and label all independent blobs
+    # labeled_array will have 0 for bg, 1 for blob 1, 2 for blob 2, etc.
+    labeled_array, num_features = label(master_neuron_mask)
+    
+    if num_features == 0:
+        print("No neurons found in the mask. No image will be saved.")
+        return
+
+    # 2. Set up the plot
+    # We create a figure and axis object to have full control
+    fig, ax = plt.subplots(figsize=(10, 10))
+    
+    # 3. Get a colormap to generate unique colors
+    # Get `num_features` distinct colors from the specified colormap
+    try:
+        colors = plt.colormaps[cmap_name].resampled(num_features)
+    except: # Fallback for older matplotlib versions
+        colors = plt.cm.get_cmap(cmap_name, num_features)
+    
+    # 4. Plot the background image
+    ax.imshow(background_image, cmap='gray')
+    
+    # 5. Loop through each blob, find its contour, and plot it
+    logger.info(f"Plotting {num_features} unique neuron contours...")
+    for i in range(1, num_features + 1): # Loop from 1 to num_features
+        # Create a mask for *only* this blob
+        blob_mask = (labeled_array == i)
+        
+        # Find contours for this single blob
+        # find_contours returns a list of contour arrays
+        contours = find_contours(blob_mask, 0.5)
+        
+        # Get the unique color for this blob (index i-1)
+        blob_color = colors(i - 1)
+        
+        # Plot all contours found for this blob (usually just one)
+        for contour in contours:
+            # contour[:, 1] is x (col), contour[:, 0] is y (row)
+            ax.plot(contour[:, 1], contour[:, 0], linewidth=1.5, color=blob_color)
+    
+    # 6. Finalize and save
+    ax.set_title(f"Unique ROI Contours ({num_features} found)")
+    ax.axis('off')
+    
+    # Adjust layout to prevent title/labels from being cut off
+    fig.tight_layout()
+    
+    # 7. Save the figure
+    try:
+        # bbox_inches='tight' crops the saved image to the plot contents
+        fig.savefig(save_filepath, dpi=dpi, bbox_inches='tight', facecolor='w')
+        logger.info(f"Successfully saved contour plot to: {save_filepath}")
+    except Exception as e:
+        logger.error(f"Error saving figure: {e}")
+        
+    # 8. Clean up: Close the figure to free up memory
+    # This is critical if you call this function in a loop!
+    plt.close(fig)
+
+
+def save_contour_and_trace_plot(
+    roi_masks, 
+    roi_traces, 
+    background_image, 
+    save_filepath, 
+    dpi=300, 
+    cmap_name="gist_rainbow",
+    trace_stack_offset_std=5.0
+    ):
+    """
+    Generates a 2-panel plot:
+    1. Left Panel: Colored contours of all ROIs on a background image.
+    2. Right Panel: Corresponding temporal traces, Z-scored and stacked.
+    
+    Each ROI contour and its trace are plotted in the same color.
+
+    Args:
+        roi_masks (list): List of 2D boolean masks (output from extract_rois_and_traces).
+        roi_traces (np.ndarray): 2D array (n_ROIs, n_timesteps) of traces.
+        background_image (np.ndarray): 2D grayscale background image.
+        save_filepath (str): Full path to save the plot (e.g., "./rois_and_traces.png").
+        dpi (int): Dots per inch for saved image quality.
+        cmap_name (str): Colormap for unique ROI colors ('gist_rainbow', 'tab20').
+        trace_stack_offset_std (float): How many std devs to offset each trace for stacking.
+    """
+    
+    num_rois = len(roi_masks)
+    if num_rois == 0:
+        logger.warning("No ROIs provided. No image will be saved.")
+        return
+    
+    if num_rois != roi_traces.shape[0]:
+        raise ValueError(
+            f"Mismatched inputs: {num_rois} masks and {roi_traces.shape[0]} traces."
+        )
+
+    # 1. Set up the figure and axes
+    # We create two subplots, side-by-side
+    fig, (ax_contour, ax_trace) = plt.subplots(
+        1, 2, 
+        figsize=(16, 8), 
+        gridspec_kw={'width_ratios': [1, 1.2]} # Give traces a bit more space
+    )
+    
+    # 2. Get a colormap
+    try:
+        colors = plt.colormaps[cmap_name].resampled(num_rois)
+    except: # Fallback
+        colors = plt.cm.get_cmap(cmap_name, num_rois)
+
+    # --- 3. Left Panel: Plot Contours ---
+    ax_contour.set_title(f"Detected ROIs ({num_rois})")
+    ax_contour.imshow(background_image, cmap='gray')
+    ax_contour.axis('off')
+
+    # --- 4. Right Panel: Plot Traces ---
+    ax_trace.set_title("Temporal Traces (Z-scored & Stacked)")
+    
+    logger.info(f"Plotting {num_rois} ROIs and traces...")
+    
+    # 5. Loop through each ROI and its trace
+    for i in range(num_rois):
+        roi_mask = roi_masks[i]
+        trace = roi_traces[i]
+        
+        # Get the unique color for this ROI
+        color = colors(i)
+        
+        # --- Plot Contour (on ax_contour) ---
+        contours = find_contours(roi_mask, 0.5)
+        for contour in contours:
+            ax_contour.plot(contour[:, 1], contour[:, 0], linewidth=1.5, color=color)
+
+        # --- Plot Trace (on ax_trace) ---
+        # Z-score the trace: (x - mean) / std
+        trace_z = zscore(trace)
+        
+        # Create a vertical offset for stacking
+        # We plot the first trace at 0, the next at 5, the next at 10, etc.
+        offset = i * trace_stack_offset_std
+        
+        # Plot the Z-scored trace with its offset
+        ax_trace.plot(trace_z + offset, color=color, linewidth=0.5)
+
+    # 6. Clean up trace plot
+    ax_trace.set_xlabel("Time (frames)")
+    # Hide the Y-axis labels/ticks as they are meaningless (just an offset)
+    ax_trace.set_yticks([])
+    ax_trace.set_ylabel(f"ROIs (stacked by {trace_stack_offset_std} std)")
+    # Invert y-axis so trace 0 is at the top
+    ax_trace.invert_yaxis()
+
+    # 7. Finalize and save
+    fig.tight_layout()
+    try:
+        fig.savefig(save_filepath, dpi=dpi, bbox_inches='tight', facecolor='w')
+        logger.info(f"Successfully saved plot to: {save_filepath}")
+    except Exception as e:
+        logger.error(f"Error saving figure: {e}")
+        
+    plt.close(fig)

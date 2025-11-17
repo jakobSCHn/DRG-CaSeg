@@ -1,8 +1,11 @@
 import numpy as np
 import logging
 
-from scipy.stats import skew
+from scipy.stats import skew, kurtosis
 from scipy.linalg import inv, sqrtm
+
+from scipy.ndimage import label, binary_opening, binary_closing
+from scipy.ndimage import sum as ndi_sum
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +146,7 @@ def ica_mukamel(
     # Final reshape of filters
     # Reshape (nIC, npix) -> (nIC, pixw, pixh)
     # Use 'F' order to match MATLAB's column-major reshape
-    ica_filters = ica_filters.reshape((nIC, pixw, pixh), order='F')
+    ica_filters = ica_filters.reshape((nIC, pixw, pixh), order="F")
 
     return ica_sig, ica_filters, ica_A, numiter
 
@@ -183,3 +186,97 @@ def _fpica_standardica(x, nIC, w_init, termtol, maxrounds):
                            f"current change in estimate {1-minAbsCos:3.3g}.")
             
         return b, iternum
+
+
+def extract_rois_and_traces(
+    spatial_filters, 
+    temporal_signals, 
+    kurtosis_thresh=5.0, 
+    z_thresh=3.0, 
+    min_size=10, 
+    max_size=500
+    ):
+    """
+    Selects neuron-like ICA components and extracts a list of individual 
+    ROI masks and their corresponding temporal traces.
+
+    Args:
+        spatial_filters (np.ndarray): 3D array (n_components, height, width).
+        temporal_signals (np.ndarray): 2D array (n_components, n_timesteps).
+        kurtosis_thresh (float): Min kurtosis for a "good" component.
+        z_thresh (float): Z-score for pixel thresholding.
+        min_size (int): Minimum pixel area for a neuron blob.
+        max_size (int): Maximum pixel area for a neuron blob.
+
+    Returns:
+        list: A list of 2D (height, width) boolean masks. 
+              Each entry is a single ROI.
+        np.ndarray: A 2D (n_ROIs, n_timesteps) array of temporal traces.
+                    The trace at index `i` corresponds to the mask at index `i`.
+    """
+    
+    n_components = spatial_filters.shape[0]
+    if temporal_signals.shape[0] != n_components:
+        raise ValueError("Shape mismatch: spatial_filters and temporal_signals")
+    
+    final_roi_masks = []
+    final_roi_traces = []
+
+    logger.info(f"Processing {n_components} spatial filters...")
+
+    for i in range(n_components):
+        component_img = spatial_filters[i]
+        component_trace = temporal_signals[i]
+        
+        k = kurtosis(component_img.ravel()) 
+        
+        if k > kurtosis_thresh:
+            logger.info(f"  [Component {i:2d}]: SELECTED (Kurtosis = {k:.2f})")
+            
+
+            # --- Mask Generation (same as before) ---
+            mean_val = np.mean(component_img)
+            std_val = np.std(component_img)
+            binary_mask = np.abs(component_img - mean_val) > (z_thresh * std_val)
+            
+            structure = np.ones((3, 3))
+            cleaned_mask = binary_opening(binary_mask, structure=structure)
+            cleaned_mask = binary_closing(cleaned_mask, structure=structure)
+            
+            labeled_array, num_features = label(cleaned_mask)
+            
+            if num_features == 0:
+                continue
+
+            blob_labels = np.arange(1, num_features + 1)
+            blob_sizes = ndi_sum(cleaned_mask, labeled_array, index=blob_labels)
+            
+            good_blob_labels = blob_labels[(blob_sizes >= min_size) & 
+                                           (blob_sizes <= max_size)]
+            
+            if good_blob_labels.size == 0:
+                continue
+                
+            logger.info(f"  [Component {i:2d}]: Found {good_blob_labels.size} good blobs.")
+            
+            # Find all pixels belonging to any good blob from this component
+            component_mask = np.isin(labeled_array, good_blob_labels)
+            
+            # Re-label the component_mask to separate any non-contiguous blobs
+            labeled_rois, num_rois = label(component_mask)
+            
+            # Add each individual blob as its own ROI
+            for j in range(1, num_rois + 1):
+                roi_mask = (labeled_rois == j)
+                final_roi_masks.append(roi_mask)
+                final_roi_traces.append(-component_trace) # All blobs from this component get the same trace
+                
+        else:
+            logger.info(f"  [Component {i:2d}]: REJECTED (Kurtosis = {k:.2f})")
+            
+    logger.info(f"Extraction complete: Found {len(final_roi_masks)} ROIs.")
+    
+    # Convert list of traces to a 2D numpy array
+    final_roi_traces_array = np.array(final_roi_traces)
+    
+    return final_roi_masks, final_roi_traces_array
