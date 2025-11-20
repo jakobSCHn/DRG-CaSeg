@@ -1,5 +1,6 @@
 import numpy as np
 import logging
+import dask.array as da
 
 from scipy.sparse.linalg import eigsh
 from scipy.linalg import eigh, inv
@@ -42,17 +43,13 @@ def cellsort_pca(
     logger.info("Starting PCA - Mukamel et al. 2009")
 
     
-    nt = video.shape[0]
+    nt, pixh, pixw = video.shape
+    npix = pixw * pixh
 
     # Handle default n_pcs
     if n_pcs is None:
         n_pcs = min(150, nt)
 
-
-    # --- Get movie dimensions ---
-    
-    pixw, pixh = video.shape[-2:]
-    npix = pixw * pixh
 
     logger.info(f"Processing {npix} pixels x {nt} time frames")
     if nt < npix:
@@ -83,10 +80,6 @@ def cellsort_pca(
     logger.info(f"CellsortPCA: saving data and exiting.")
 
     return mixedsig, mixedfilters, cov_evals, cov_trace, movm, movtm
-
-# ----------------------------------------------------------------
-# --- "PRIVATE" HELPER FUNCTIONS" ---
-# ----------------------------------------------------------------
 
 
 def _create_covmat(

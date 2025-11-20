@@ -2,7 +2,9 @@ import czifile
 import numpy as np
 import logging
 import cv2 as cv
+import dask.array as da
 
+from dask.array.image import imread
 from skimage.feature import ORB, match_descriptors
 from skimage.measure import ransac
 from skimage.transform import AffineTransform, warp
@@ -19,6 +21,27 @@ def load_video(
     vid = np.squeeze(vid)
     
     return vid
+
+
+def load_video_dask(
+    filename: str | Path,
+    frames_per_chunk: int = 2500,
+    ):
+    
+    vid = imread(
+        filename=str(filename),
+        imread=czifile.imread,
+    )
+    vid = da.squeeze(vid)
+    vid = da.rechunk(
+        vid,
+        chunks={0: frames_per_chunk,
+                1: -1,
+                2: -1}
+    )
+
+    return vid
+
 
 
 def flatten_video(
@@ -41,6 +64,20 @@ def scale_video(
 
     normalized_video = (normalized_video - min_intensity) / (max_intensity - min_intensity)
     return normalized_video
+
+
+def scale_video_dask(
+    video: da.Array,
+    min_intensity: int = 0,
+    max_intensity: int = 255
+    ):
+
+    normalized_video = video.astype(np.float32)
+    normalized_video = da.clip(normalized_video, min_intensity, max_intensity)
+
+    normalized_video = (normalized_video - min_intensity) / (max_intensity - min_intensity)
+    return normalized_video
+
 
 
 def save_video(

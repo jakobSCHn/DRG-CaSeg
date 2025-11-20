@@ -18,6 +18,7 @@ from analysis_utils.ica import ica_mukamel, extract_rois_and_traces
 from data_utils.plotter import  plot_spatial_patterns, plot_temporal_patterns, save_colored_contour_plot, save_contour_and_trace_plot
 #from analysis_utils.caiman import CaimanPipeline
 from data_utils.synthesizer import DRGtissueModel
+from analysis_utils.pca_dask import cellsort_pca_dask
 
 config.setup_logging()
 logger = logging.getLogger(__name__)
@@ -30,6 +31,21 @@ if __name__ == "__main__":
     
 
     p = Path("/mnt/c/Users/jakschneid0621/OneDrive - AO Foundation/Documents/Data/DRG slice calcium-B1.czi")
+
+    vid = wrangler.load_video_dask(filename=p)
+    shape = vid.shape
+    vid = wrangler.scale_video_dask(vid, max_intensity=64)
+    logger.info("Scaling Complete")
+
+    mixedsig, mixedfilters, cov_evals, cov_trace, movm, movtm = cellsort_pca_dask(vid, n_pcs=15)
+    logger.info("Graph building complete")
+    ica_sig, ica_filters, ica_A, numiter = ica_mukamel(
+        mixedsig=mixedsig.compute(),
+        mixedfilters=mixedfilters.compute(),
+        CovEvals=cov_evals,
+        mu=0.5,
+        maxrounds=200,
+    )
 
     vid_memmap_path, shape = wrangler.scale_video_to_memmap(
         czi_filename=p,
