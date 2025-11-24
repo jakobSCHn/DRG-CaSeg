@@ -15,7 +15,7 @@ from utils import seed_everything
 #from data_utils.synthesizer import DRGtissueModel
 from analysis_utils.pca import cellsort_pca
 from analysis_utils.ica import ica_mukamel, extract_rois_and_traces
-from data_utils.plotter import  plot_spatial_patterns, plot_temporal_patterns, save_colored_contour_plot, save_contour_and_trace_plot
+from data_utils.plotter import  plot_spatial_patterns, plot_temporal_patterns, save_colored_contour_plot, save_contour_and_trace_plot, save_roi_video
 #from analysis_utils.caiman import CaimanPipeline
 from data_utils.synthesizer import DRGtissueModel
 from analysis_utils.pca_dask import cellsort_pca_dask
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 if __name__ == "__main__":
-    
+    """
     SEED = int(os.getenv("GLOBAL_SEED", 42))
     seed_everything(SEED)
     
@@ -52,8 +52,8 @@ if __name__ == "__main__":
         memmap_filename=Path("/home/jaschneider/projects/DRG-CaSeg/DRG-CaSeg/data/interim/czi_vid.mmap"), 
         max_intensity=64,
     )
-
     """
+    p = Path("/mnt/c/Users/jakschneid0621/OneDrive - AO Foundation/Documents/Data/DRG slice calcium-B1.czi")
     vid = wrangler.load_video(filename=p)
     logger.info("Video loaded")
     vid_sec = vid[10000:11500]
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     vid_norm = wrangler.scale_video(vid_sec, max_intensity=64)
     logger.info("Video normalized")
     
-    mixedsig, mixedfilters, cov_evals, cov_trace, movm, movtm = cellsort_pca(vid_norm, n_pcs=50)
+    mixedsig, mixedfilters, cov_evals, cov_trace, movm, movtm = cellsort_pca(vid_norm, n_pcs=20)
 
     ica_sig, ica_filters, ica_A, numiter = ica_mukamel(
         mixedsig=mixedsig,
@@ -72,14 +72,11 @@ if __name__ == "__main__":
         maxrounds=200,
     )
     
-    master_mask, good_comp = segment_neurons_from_ica(
-        spatial_filters=ica_filters
-    )
-
-    save_colored_contour_plot(
-        master_neuron_mask=master_mask,
-        background_image=vid_norm.mean(axis=0),
-        save_filepath="/home/jaschneider/projects/DRG-CaSeg/Plots/MasterMask.png",
+    masks, traces = extract_rois_and_traces(
+        spatial_filters=ica_filters,
+        temporal_signals=ica_sig,
+        min_size=15,
+        max_size=1500,
     )
 
     plot_temporal_patterns(
@@ -91,7 +88,35 @@ if __name__ == "__main__":
         ica_filters=ica_filters,
         n_cols=5,
     )
-    
+
+
+    save_contour_and_trace_plot(
+        roi_masks=masks,
+        roi_traces=traces,
+        background_image=vid_norm.mean(axis=0),
+        save_filepath="/home/jaschneider/projects/DRG-CaSeg/Plots/MasterMask.png",
+    )
+
+
+    save_roi_video(
+        roi_masks=masks, 
+        roi_traces=traces, 
+        video_data=vid_norm, 
+        save_filepath="/home/jaschneider/projects/DRG-CaSeg/Plots/ROI_video.mp4", 
+    )
+
+
+    plot_temporal_patterns(
+        ica_signals=ica_sig,
+        fs=28.5,
+        n_cols=5,
+    )
+    plot_spatial_patterns(
+        ica_filters=ica_filters,
+        n_cols=5,
+    )
+
+    """
     model = DRGtissueModel(
         num_large_neurons=5,
         num_small_neurons=10,
@@ -107,7 +132,7 @@ if __name__ == "__main__":
     plt = model.plot_ground_truth("/home/jaschneider/projects/DRG-CaSeg/Plots/GT_plot.png")
     vid = model.render_video()
     logger.info("Video generated")
-    """
+
     mixedsig, mixedfilters, cov_evals, cov_trace, movm, movtm = cellsort_pca(vid_norm, n_pcs=50)
 
     ica_sig, ica_filters, ica_A, numiter = ica_mukamel(
@@ -153,3 +178,5 @@ if __name__ == "__main__":
         output_filename="test_sim.mp4"
     )
     logger.info("Exiting Script")
+
+    """

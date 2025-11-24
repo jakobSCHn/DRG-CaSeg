@@ -1,6 +1,7 @@
 import numpy as np
 import logging
 import matplotlib.pyplot as plt
+import cv2
 
 from scipy.ndimage import label
 from skimage.measure import find_contours
@@ -358,3 +359,100 @@ def save_contour_and_trace_plot(
         logger.error(f"Error saving figure: {e}")
         
     plt.close(fig)
+
+def save_roi_video(
+    roi_masks, 
+    roi_traces, 
+    video_data, 
+    save_filepath, 
+    fps=30, 
+    dpi=100,  
+    cmap_name="gist_rainbow",
+    trace_stack_offset_std=5.0
+    ):
+    
+    num_rois = len(roi_masks)
+    n_frames, height, width = video_data.shape
+    
+    
+    fig, (ax_video, ax_trace) = plt.subplots(
+        1, 2, 
+        figsize=(16, 8), 
+        gridspec_kw={"width_ratios": [1, 1.2]},
+        dpi=dpi
+    )
+    fig.suptitle("Isolated Spatial and Temporal Signatures", fontsize=20, fontweight="bold", y=0.95)
+
+    
+    try:
+        colors = plt.colormaps[cmap_name].resampled(num_rois)
+    except AttributeError:
+        colors = plt.cm.get_cmap(cmap_name, num_rois)
+
+    ax_trace.set_title("Temporal Traces (Z-scored & Stacked)")
+    
+    for i in range(num_rois):
+        trace_z = zscore(roi_traces[i])
+        offset = i * trace_stack_offset_std
+        ax_trace.plot(trace_z + offset, color=colors(i), linewidth=0.5)
+
+    ax_trace.set_yticks([])
+    ax_trace.set_xlabel("Time (frames)")
+    ax_trace.set_ylabel(f"ROIs (stacked)")
+    ax_trace.invert_yaxis()
+    
+    # The moving vertical line
+    time_indicator = ax_trace.axvline(x=0, color="black", linestyle='--', alpha=0.7)
+
+    ax_video.set_title("Detected ROIs")
+    ax_video.axis("off")
+    
+    # Pre-calculate contours to avoid doing it in the loop
+    for i in range(num_rois):
+        contours = find_contours(roi_masks[i], 0.5)
+        for contour in contours:
+            ax_video.plot(contour[:, 1], contour[:, 0], linewidth=1.5, color=colors(i))
+
+    # Initial Image
+    vmin, vmax = np.percentile(video_data, 1), np.percentile(video_data, 99)
+    img_display = ax_video.imshow(
+        video_data[0], 
+        cmap="gray", 
+        vmin=vmin, 
+        vmax=vmax
+    )
+
+    
+    fig.canvas.draw()
+    mat_img = np.array(fig.canvas.renderer.buffer_rgba())
+    h_plot, w_plot, _ = mat_img.shape
+
+    # Define the codec (mp4v is standard for .mp4)
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
+    out = cv2.VideoWriter(save_filepath, fourcc, fps, (w_plot, h_plot))
+
+    if not out.isOpened():
+        raise IOError(f"Could not open video writer for {save_filepath}")
+
+    logger.info(f"Rendering {n_frames} frames to {save_filepath} using OpenCV...")
+
+
+    for frame_idx in range(n_frames):
+        img_display.set_data(video_data[frame_idx])
+        time_indicator.set_xdata([frame_idx, frame_idx])
+        ax_video.set_title(f"Frame {frame_idx}")
+        
+        fig.canvas.draw()
+        img_rgba = np.array(fig.canvas.renderer.buffer_rgba())
+        img_bgr = cv2.cvtColor(img_rgba, cv2.COLOR_RGBA2BGR)
+        
+        out.write(img_bgr)
+        
+        # Optional: Print progress every 10%
+        if frame_idx % (n_frames // 10) == 0:
+            logger.info(f"Processed {frame_idx}/{n_frames} frames...")
+
+    # --- 6. Cleanup ---
+    out.release()
+    plt.close(fig)
+    logger.info("Video saved successfully.")

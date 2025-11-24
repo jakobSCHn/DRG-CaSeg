@@ -74,7 +74,7 @@ def cellsort_pca(
         mixedsig = _reload_moviedata(nt, mov.T, mixedfilters, cov_evals)
 
     # Reshape spatial filters
-    mixedfilters = mixedfilters.reshape((pixw, pixh, n_pcs), order="F")
+    mixedfilters = mixedfilters.reshape((pixh, pixw, n_pcs), order="F")
 
     
     logger.info(f"CellsortPCA: saving data and exiting.")
