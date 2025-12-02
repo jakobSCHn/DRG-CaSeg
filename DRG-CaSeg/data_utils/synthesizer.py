@@ -237,7 +237,9 @@ def generate_photon_shot_noise(
         The noisy image, normalized back to the [0, 1] range.
     """
     lambda_image = image * full_well_capacity
+    del image
     noisy_image_electrons = np.random.poisson(lam=lambda_image)
+    del lambda_image
 
     saturated_image_electrons = np.clip(
         noisy_image_electrons, 0, full_well_capacity
@@ -880,7 +882,7 @@ class DRGtissueModel:
     
         return ~hilltop_mask
     
-    
+
     def plot_ground_truth(
         self,
         save_loc: Path | str, 
