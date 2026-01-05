@@ -23,26 +23,6 @@ def load_video(
     return vid
 
 
-def load_video_dask(
-    filename: str | Path,
-    frames_per_chunk: int = 2500,
-    ):
-    
-    vid = imread(
-        filename=str(filename),
-        imread=czifile.imread,
-    )
-    vid = da.squeeze(vid)
-    vid = da.rechunk(
-        vid,
-        chunks={0: frames_per_chunk,
-                1: -1,
-                2: -1}
-    )
-
-    return vid
-
-
 
 def flatten_video(
     video: np.ndarray

@@ -1,0 +1,18 @@
+experiment_name: "test_01"
+
+dataset:
+  loader: data_utils.wrangler.load_video
+  params:
+    filename: "/mnt/c/Users/jakschneid0621/OneDrive - AO Foundation/Documents/Data/DRG slice calcium-B1.czi"
+    test_param: 42
+
+preprocessing:
+  - name: "scaling"
+    function: data_utils.wrangler.scale_video
+    params:
+      max_intensity: 64 
+
+#Preliminary Parameters
+learning_rate: 0.001
+batch_size: 16
+epochs: 10

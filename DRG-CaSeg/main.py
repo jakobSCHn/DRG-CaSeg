@@ -1,6 +1,7 @@
 import argparse
 
 from infra.utils import get_config_files
+from infra.experiment import Experiment
 
 
 import logging
@@ -14,8 +15,9 @@ def main():
     
     # allow passing multiple files or folders
     parser.add_argument(
-        "configs", 
-        nargs="+", 
+        "--configs", 
+        nargs="+",
+        required=True,
         help="List of yaml files or folders containing yaml files."
     )
     
@@ -29,10 +31,15 @@ def main():
 
     args = parser.parse_args()
     
-    # 1. Resolve all files
-    files_to_run = get_config_files(args.configs)
-    logger.info(f"Found {len(files_to_run)} experiments to run.")
+    #Extract all of the experiment files
+    configs_to_run = get_config_files(args.configs)
+    logger.info(f"Found {len(configs_to_run)} experiments to run.")
     
+    #Set up and run the experiments
+    for cfg in configs_to_run:
+        exp = Experiment.from_yaml(cfg)
+        exp.run()
+
     
 
 

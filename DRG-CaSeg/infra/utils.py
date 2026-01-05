@@ -1,14 +1,18 @@
 import importlib
 import os
 import glob
+import inspect
+import functools
 
 import logging
 logger = logging.getLogger(__name__)
 
-def get_object_from_path(path):
+def get_object_from_path(
+    import_path
+    ):
     
     try:
-        module_path, object_name = path.rsplit(".", 1)
+        module_path, object_name = import_path.rsplit(".", 1)
         
         module = importlib.import_module(module_path)
         obj = getattr(module, object_name)
@@ -16,8 +20,32 @@ def get_object_from_path(path):
         return obj
     
     except (ImportError, AttributeError) as e:
-        raise ImportError(f"Could not load object '{path}'. Error: {e}")
-    
+        raise ImportError(f"Could not load object '{import_path}'. Error: {e}")
+
+
+def configure_callable(
+    import_path,
+    params,
+    ):
+    obj_def = get_object_from_path(import_path)
+        
+    sig = inspect.signature(obj_def)
+    has_kwargs = any(param.kind ==param.VAR_KEYWORD for param in sig.parameters.values())
+
+    if has_kwargs:
+        valid_params = params
+    else:
+        valid_params = {
+            k: v for k, v in params.items()
+            if k in sig.parameters
+        }
+        dropped_keys = set(params.keys()) - set(valid_params.keys())
+        if dropped_keys:
+            logger.warning(f"Dropped params for {import_path}: {dropped_keys}")
+
+    return functools.partial(obj_def, **valid_params)
+
+
 
 def get_config_files(
     inputs: list[str] | set[str]
