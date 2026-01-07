@@ -4,6 +4,8 @@ import glob
 import inspect
 import functools
 import shutil
+import numpy as np
+import yaml
 
 from pathlib import Path
 
@@ -60,16 +62,16 @@ def get_config_files(
     yaml_files = []
     for path in inputs:
         if os.path.isdir(path):
-            # If it's a folder, grab all .yaml files inside
+            #If it's a folder, grab all .yaml files inside
             found = glob.glob(os.path.join(path, "*.yaml"))
             yaml_files.extend(found)
         elif os.path.isfile(path) and path.endswith(".yaml"):
-            # If it's a direct file, add it
+            #If it's a direct file, add it
             yaml_files.append(path)
         else:
             logger.warning(f"Warning: '{path}' is not a valid YAML file or directory.")
             
-    # Remove duplicates
+    #Remove duplicates
     return sorted(list(set(yaml_files)))
 
 
@@ -90,3 +92,37 @@ def setup_experiment_folder(
     shutil.copy(p, output_dir / "config.yaml")
 
     logger.info(f"Initialized Experiment folder: {p.stem}")
+
+
+def save_dict_to_yaml(
+    data: dict,
+    save_path: Path,
+    ):
+    """
+    Saves a dictionary to a YAML file, handling pathlib.Path objects
+    and converting common Numpy types to native Python types.
+    """
+    #Helper to convert numpy types for YAML safety
+    def convert_numpy(obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return obj
+
+    #Recursively clean the dictionary
+    def clean_dict(d):
+        new_d = {}
+        for k, v in d.items():
+            if isinstance(v, dict):
+                new_d[k] = clean_dict(v)
+            else:
+                new_d[k] = convert_numpy(v)
+        return new_d
+
+    sanitized_data = clean_dict(data)
+
+    with open(save_path, "w") as f:
+        yaml.dump(sanitized_data, f, sort_keys=False, default_flow_style=False)

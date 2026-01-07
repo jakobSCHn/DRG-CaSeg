@@ -782,13 +782,4 @@ class DRGtissueModel:
 
         # FORCE REBUILD of footprints with new coordinates
         self.build_image()
-
-
-
-
-def synthetic_data_loader(
-    params: dict,
-    ):
-
-    gen = DRGtissueModel(**params)
     

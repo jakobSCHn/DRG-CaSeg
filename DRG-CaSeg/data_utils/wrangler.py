@@ -145,7 +145,7 @@ def correct_motion(
     return corrected_video
 
 
-def load_synthetic_video(
+def load_drg_model_video(
     params
     ):
     """
@@ -159,23 +159,21 @@ def load_synthetic_video(
         random.seed(seed)
         logger.info(f"Initialized synthetic generator with Seed: {seed}")
 
-    # 2. Separate Model Params from Wrapper Params
-    # We remove keys that the DRGtissueModel constructor doesn't know about
+    #Separate Model Params from Wrapper Params and remove what's not meant for the constructor
     wrapper_specific_keys = ["seed", "perturbation", "id"]
     model_params = {k: v for k, v in params.items() if k not in wrapper_specific_keys}
     
-    # Initialize the model
+    #Initialize the model
     model = DRGtissueModel(**model_params)
 
-    # 3. Build the initial "Base" state
-    # This generates the default neurons using the seed provided
+    #Generate the default neurons using the seed provided
     model.build_image()
 
-    # 4. Apply Modifications (The "Alter Positions" logic)
+    #Apply Modifications to neuronal positions
     if "perturbation" in params:
         perturb_conf = params["perturbation"]
         
-        # Extract arguments with safe defaults
+        #Extract arguments with safe defaults
         target_indices = perturb_conf.get("target_indices", [])
         angle_deg = perturb_conf.get("angle_deg", None)
         shift_px = perturb_conf.get("shift_px", None)
@@ -190,17 +188,17 @@ def load_synthetic_video(
         else:
             logger.warning("Perturbation instructions found, but 'target_indices' was empty.")
 
-    # 5. Render the final video
+    #Render the final video
     logger.info("Rendering video frames...")
     video_data = model.render_video()
 
-    # 6. Return standardized dataset structure
-    # We include the 'id' from params if available, otherwise generic default
+    #Return standardized dataset structure
     dataset_id = params.get("id", f"synthetic_{seed}")
     
     return {
         "id": dataset_id,
         "data": video_data,
+        "gt": model.footprints,
         "meta": {
             "fps": model.fps,
             "seed": seed,
