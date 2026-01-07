@@ -1,6 +1,5 @@
 import numpy as np
 import logging
-import dask.array as da
 
 from scipy.sparse.linalg import eigsh
 from scipy.linalg import eigh, inv
@@ -9,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 def cellsort_pca(
     video: np.ndarray,
-    n_pcs: int = None,
+    pcs: int = None,
     ):
     """
     Reads TIFF movie data and performs SVD/PCA dimensional reduction.
@@ -47,8 +46,15 @@ def cellsort_pca(
     npix = pixw * pixh
 
     # Handle default n_pcs
-    if n_pcs is None:
+    if pcs is None:
         n_pcs = min(150, nt)
+        pc_slice = slice(0, n_pcs)
+    elif isinstance(pcs, (tuple, list)):
+        n_pcs = pcs[1] #Set the pcs to be calculated to the higher number
+        pc_slice = slice(pcs[0], pcs[1])
+    else:
+        n_pcs = pcs
+        pc_slice = slice(0, pcs)
 
 
     logger.info(f"Processing {npix} pixels x {nt} time frames")
@@ -64,17 +70,20 @@ def cellsort_pca(
 
     if nt < npix:
         # Perform SVD on temporal covariance
-        mixedsig, cov_evals, percentvar = _cellsort_svd(covmat, n_pcs, nt, npix)
+        mixedsig, cov_evals, percentvar = _cellsort_svd(covmat, n_pcs, pc_slice, nt, npix)
         # Load the other set of principal components
         mixedfilters = _reload_moviedata(pixw * pixh, mov, mixedsig, cov_evals)
     else:
         # Perform SVD on spatial components
-        mixedfilters, cov_evals, percentvar = _cellsort_svd(covmat, n_pcs, nt, npix)
+        mixedfilters, cov_evals, percentvar = _cellsort_svd(covmat, n_pcs, pc_slice, nt, npix)
         # Load the other set of principal components
         mixedsig = _reload_moviedata(nt, mov.T, mixedfilters, cov_evals)
 
+    # Infer the actual number of PCs returned (length of the slice) for reshaping
+    n_pcs_out = mixedfilters.shape[0] if mixedfilters.ndim == 2 else mixedfilters.shape[-1]
+    
     # Reshape spatial filters
-    mixedfilters = mixedfilters.reshape((pixh, pixw, n_pcs), order="F")
+    mixedfilters = mixedfilters.reshape((pixh, pixw, n_pcs_out), order="F")
 
     
     logger.info(f"CellsortPCA: saving data and exiting.")
@@ -123,7 +132,13 @@ def _create_covmat(
     return covmat, mov, movm, movtm
 
 
-def _cellsort_svd(covmat, n_pcs, nt, npix):
+def _cellsort_svd(
+    covmat,
+    n_pcs,
+    pc_slice,
+    nt,
+    npix
+    ):
     """Perform SVD"""
     cov_trace = np.trace(covmat) / npix
 
@@ -151,10 +166,16 @@ def _cellsort_svd(covmat, n_pcs, nt, npix):
         mixedsig = mixedsig[:, positive_evals]
         cov_evals = cov_evals[positive_evals]
 
+    #Extract the proper slice of eigenvectors to be processed
+    mixedsig = mixedsig[:, pc_slice]
+    cov_evals = cov_evals[pc_slice]
+    #Retrieve the number of PCs actually used
+    used_pcs = cov_evals.shape[0]
+
     mixedsig = mixedsig.T * nt
     cov_evals = cov_evals / npix
     percentvar = 100 * np.sum(cov_evals) / cov_trace
-    logger.info(f"First {n_pcs} PCs contain {percentvar:.3f}% of the variance.")
+    logger.info(f"Selected {used_pcs} PCs containing {percentvar:.3f}% of the variance.")
     
     return mixedsig, cov_evals, percentvar
 

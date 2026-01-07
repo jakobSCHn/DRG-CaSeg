@@ -2,13 +2,13 @@ import czifile
 import numpy as np
 import logging
 import cv2 as cv
-import dask.array as da
+import random
 
-from dask.array.image import imread
 from skimage.feature import ORB, match_descriptors
 from skimage.measure import ransac
 from skimage.transform import AffineTransform, warp
 from pathlib import Path
+from data_utils.synthesizer import DRGtissueModel
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,10 @@ def load_video(
     vid = czifile.imread(filename=filename)
     vid = np.squeeze(vid)
     
-    return vid
+    return {
+        "id": id,
+        "data": vid
+    }
 
 
 
@@ -31,10 +34,7 @@ def flatten_video(
 
     flat_video = video.reshape(video.shape[0], -1)
 
-    return {
-        "id": id,
-        "data": flat_video
-    }
+    return flat_video
 
 
 def scale_video(
@@ -45,19 +45,6 @@ def scale_video(
 
     normalized_video = video.astype(np.float32).copy()
     normalized_video = np.clip(normalized_video, a_min=min_intensity, a_max=max_intensity)
-
-    normalized_video = (normalized_video - min_intensity) / (max_intensity - min_intensity)
-    return normalized_video
-
-
-def scale_video_dask(
-    video: da.Array,
-    min_intensity: int = 0,
-    max_intensity: int = 255
-    ):
-
-    normalized_video = video.astype(np.float32)
-    normalized_video = da.clip(normalized_video, min_intensity, max_intensity)
 
     normalized_video = (normalized_video - min_intensity) / (max_intensity - min_intensity)
     return normalized_video
@@ -158,7 +145,7 @@ def correct_motion(
     return corrected_video
 
 
-def load_synthetic_drg_video(
+def load_synthetic_video(
     params
     ):
     """

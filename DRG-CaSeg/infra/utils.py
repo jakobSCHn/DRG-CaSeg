@@ -3,6 +3,9 @@ import os
 import glob
 import inspect
 import functools
+import shutil
+
+from pathlib import Path
 
 import logging
 logger = logging.getLogger(__name__)
@@ -68,3 +71,22 @@ def get_config_files(
             
     # Remove duplicates
     return sorted(list(set(yaml_files)))
+
+
+def setup_experiment_folder(
+    run_id: str,
+    config_path: str,
+    ana_id: str | None = None,
+    ):
+
+    p = Path(config_path)
+    if ana_id:
+        output_dir_name = f"{p.stem}_{run_id}_{ana_id}"
+    else:
+        output_dir_name = f"{p.stem}_{run_id}_{ana_id}"
+    output_dir = Path("results") / output_dir_name
+
+    output_dir.mkdir(parents=True)
+    shutil.copy(p, output_dir / "config.yaml")
+
+    logger.info(f"Initialized Experiment folder: {p.stem}")

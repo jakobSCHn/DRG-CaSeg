@@ -360,7 +360,7 @@ def save_contour_and_trace_plot(
         
     plt.close(fig)
 
-def save_roi_video(
+def render_inference_video(
     roi_masks, 
     roi_traces, 
     video_data, 

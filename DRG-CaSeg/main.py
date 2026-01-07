@@ -1,16 +1,20 @@
 import argparse
+import os
 
 from infra.utils import get_config_files
 from infra.experiment import Experiment
 
-
 import logging
 from config import setup_logging
+from utils import seed_everything
 setup_logging()
 logger = logging.getLogger(__name__)
 
 
 def main():
+    SEED = int(os.getenv("GLOBAL_SEED", 42))
+    seed_everything(SEED)
+
     parser = argparse.ArgumentParser(description="Run batch experiments.")
     
     # allow passing multiple files or folders

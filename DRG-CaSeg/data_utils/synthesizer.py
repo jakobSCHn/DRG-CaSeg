@@ -182,7 +182,7 @@ class DRGtissueModel:
         return video_norm
 
 
-    def build_image(self) -> Tuple[np.ndarray, np.ndarray]:
+    def build_image(self) -> tuple[np.ndarray, np.ndarray]:
         """
         Constructs footprints and traces based on `cell_metadata`. 
         If metadata doesn't exist, it generates it.
