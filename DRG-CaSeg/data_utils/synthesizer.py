@@ -61,55 +61,65 @@ class DRGtissueModel:
         s_neuron_px (tuple): The (min, max) diameter range for small neurons in pixels.
         l_neuron_px (tuple): The (min, max) diameter range for large neurons in pixels.
     """
+    # --- Basic Dimensions and Scale ---
     width_px: int = attrs.field(default=384)
     height_px: int = attrs.field(default=292)
     fps: float = attrs.field(default=28.5)
     duration_s: int = attrs.field(default=60)
     um_per_pixel: float = attrs.field(default=7.206)
     
+    # --- Spatial Component Parameters ---
     num_small_neurons: int = attrs.field(default=20)
     num_large_neurons: int = attrs.field(default=15)
-    small_neuron_size_um: tuple = attrs.field(default=(20, 50))
-    large_neuron_size_um: tuple = attrs.field(default=(50, 200))
-    glia_thickness_um: tuple = attrs.field(default=(5, 15))
+    small_neuron_size_um: tuple[float, float] = attrs.field(default=(20, 50))
+    large_neuron_size_um: tuple[float, float] = attrs.field(default=(50, 200))
+    glia_thickness_um: tuple[float, float] = attrs.field(default=(5, 15))
     glia_variance_um: float = attrs.field(default=3)
     vessel_area: float = attrs.field(default=0.05)
     
+    # --- Brightness and Noise Parameters ---
     neuron_base_brightness: int = attrs.field(default=75)
     glia_base_brightness: int = attrs.field(default=50)
     snr: float = attrs.field(default=3.0)
     background_brightness: int = attrs.field(default=25)
     background_noise_lvl: int = attrs.field(default=5)
 
+    # --- Temporal Activity Parameters ---
     spike_rate_neuron: float = attrs.field(default=0.7)
     tau_neuron_s: float = attrs.field(default=0.2)
     spike_rate_glia: float = attrs.field(default=0.06)
     tau_glia_s: float = attrs.field(default=1.6)
 
+    # --- Artifact Simulation ---
     full_well_capacity: int = attrs.field(default=0)
     movement_artifact: bool = attrs.field(default=False)
     shrink_rate: float = attrs.field(default=0.01)
 
+    # --- Internal State (Initialized automatically) ---
     width_um: float = attrs.field(init=False)
     height_um: float = attrs.field(init=False)
     num_frames: int = attrs.field(init=False)
-    s_neuron_px: tuple = attrs.field(init=False)
-    l_neuron_px: tuple = attrs.field(init=False)
+    s_neuron_px: tuple[float, float] = attrs.field(init=False)
+    l_neuron_px: tuple[float, float] = attrs.field(init=False)
 
-    footprints: np.ndarray = attrs.field(init=False)
-    activities: np.ndarray = attrs.field(init=False)
-    background: np.ndarray = attrs.field(init=False)
-
+    # Storage for the rendering matrices
+    footprints = attrs.field(init=False, default=None)
+    activities = attrs.field(init=False, default=None)
+    background = attrs.field(init=False, default=None)
+    
+    # Storage for the abstract definition of cells (allows moving them later)
+    cell_metadata: list[dict[str, any]] = attrs.field(init=False, factory=list)
 
     def __attrs_post_init__(self):
+        # Calculate derived physical properties
         self.width_um = self.width_px * self.um_per_pixel
         self.height_um = self.height_px * self.um_per_pixel
         self.num_frames = int(self.duration_s * self.fps)
 
-        self.s_neuron_px = tuple(size / self.um_per_pixel for size in self.small_neuron_size_um)
-        self.l_neuron_px = tuple(size / self.um_per_pixel for size in self.large_neuron_size_um)
+        self.s_neuron_px = tuple(s / self.um_per_pixel for s in self.small_neuron_size_um)
+        self.l_neuron_px = tuple(s / self.um_per_pixel for s in self.large_neuron_size_um)
         
-        logger.info(f"DRGtissueModel instance created with dimension {self.width_px}x{self.height_px}.")
+        logger.info(f"DRGtissueModel initialized: {self.width_px}x{self.height_px} px ({self.num_frames} frames).")
 
 
     def render_video(
@@ -137,25 +147,24 @@ class DRGtissueModel:
             A NumPy array representing the final rendered video, with pixel values 
             normalized to the range [0.0, 1.0].
         """
-        if hasattr(self, "footprints") and hasattr(self, "activities"):
-            footprints = self.footprints
-            activites = self.activities
-        else:
-            footprints, activites = self.build_image()
-        video_frames = []
+        if self.footprints is None or self.activities is None:
+            self.build_image()
+            
+        if self.background is None:
+            self.generate_static_background()
+
+        video = np.zeros((self.num_frames, self.height_px, self.width_px), dtype=np.float32)        
         for t in range(self.num_frames):
             if self.movement_artifact:
-                current_footprints = self._apply_motion_artifact(footprints, t)
+                current_footprints = self._apply_motion_artifact(self.footprints, t)
             else:
-                current_footprints = footprints
-            brightness = activites[:,t]
-            brightness_vector = brightness[:, np.newaxis, np.newaxis]
+                current_footprints = self.footprints
+            brightness_values = self.activities[:, t]
 
-            scaled_footprints = current_footprints * brightness_vector
-            frame = np.sum(scaled_footprints, axis=0)
-            video_frames.append(frame)
-        
-        video = np.stack(video_frames, axis=0) + self.background
+            frame = np.einsum('nhw,n->hw', current_footprints, brightness_values)       
+            video[t] = frame
+
+        video += self.background
         video = np.clip(video, 0, 255)
         video_noisy = ops.generate_gaussian_noise(
             video,
@@ -170,90 +179,72 @@ class DRGtissueModel:
                 self.full_well_capacity
             )
 
-
         return video_norm
 
 
-    def build_image(
-        self
-        ) -> tuple[np.ndarray, np.ndarray]:
-        """Constructs the spatial footprint and temporal activity (trace) matrices 
-        for all neurons and their associated glia.
-
-        This method generates a set of small and large neurons with randomly chosen 
-        diameters and glial thickness. It then iteratively calls helper methods to 
-        generate the 2D spatial map and 1D temporal trace for each component (neuron 
-        and glia), finally stacking them into large matrices used for video rendering.
-
-        Args:
-            self: The instance of the class containing configuration properties like:
-                - num_small_neurons, num_large_neurons (int): Counts of each neuron type.
-                - s_neuron_px, l_neuron_px (tuple): Diameter ranges for neurons.
-                - glia_thickness_um (tuple): Glia thickness range.
-                - height_px, width_px (int): Dimensions of the video frame.
-                - num_frames, fps (int): Temporal properties for traces.
-                - generate_neuron_with_glia() (method): Generates spatial maps.
-                - build_timeline_neuron(), build_timeline_glia() (methods): Generate traces.
-
-        Returns:
-            A tuple containing two NumPy arrays:
-            - footprints (np.ndarray): The 3D array of stacked spatial maps for all 
-            components (shape: [num_components, height_px, width_px]).
-            - activities (np.ndarray): The 2D array of stacked temporal traces for all 
-            components (shape: [num_components, num_frames]).
+    def build_image(self) -> Tuple[np.ndarray, np.ndarray]:
         """
+        Constructs footprints and traces based on `cell_metadata`. 
+        If metadata doesn't exist, it generates it.
+        """
+        
+        if not self.cell_metadata:
+            self._generate_initial_cell_definitions()
+
         spatial_maps = []
         traces = []
-        diameters = np.concatenate(
-            (
-            np.random.uniform(self.s_neuron_px[0], self.s_neuron_px[1], self.num_small_neurons),
-            np.random.uniform(self.l_neuron_px[0], self.l_neuron_px[1], self.num_large_neurons)
-            )
-        )
-        glia_thickness = np.random.uniform(self.glia_thickness_um[0], self.glia_thickness_um[1], len(diameters))
-        for i in range(len(diameters)):
+
+        for cell in self.cell_metadata:
             s_neuron, s_glia = self.generate_neuron_with_glia(
                 h=self.height_px,
                 w=self.width_px,
-                center_y=np.random.randint(0, self.height_px),
-                center_x=np.random.randint(0, self.width_px),
-                sig_y_neuron=diameters[i],
-                sig_x_neuron=np.random.uniform(0.8, 1.2) * diameters[i],
+                center_y=cell["y"],
+                center_x=cell["x"],
+                sig_y_neuron=cell["size"],
+                sig_x_neuron=cell["size"] * cell["aspect_ratio"],
                 cutoff_percentage=15,
-                glia_thickness_um=glia_thickness[i],
+                glia_thickness_um=cell["glia_thick"],
                 glia_variance_um=self.glia_variance_um,
-                angle_deg=np.random.uniform(0, 90),
+                angle_deg=cell["angle"],
             )
-            trace_neuron = self.build_timeline_neuron(
-                num_frames=self.num_frames,
-                frame_rate_hz=self.fps,
-                spike_rate_hz=self.spike_rate_neuron,
-                tau_s=self.tau_neuron_s
-            )
-            trace_glia = self.build_timeline_glia(
-                num_frames=self.num_frames,
-                frame_rate_hz=self.fps,
-                spike_rate_hz=self.spike_rate_glia,
-                tau_s=self.tau_glia_s
-            )
+
+            if "trace_neuron" not in cell:
+                cell["trace_neuron"] = self.build_timeline_neuron(
+                    self.num_frames, self.fps, self.spike_rate_neuron, self.tau_neuron_s
+                )
+                cell["trace_glia"] = self.build_timeline_glia(
+                    self.num_frames, self.fps, self.spike_rate_glia, self.tau_glia_s
+                )
+
             spatial_maps.extend([s_neuron, s_glia])
-            traces.extend([trace_neuron, trace_glia])
+            traces.extend([cell["trace_neuron"], cell["trace_glia"]])
 
-
+        self.footprints = np.stack(spatial_maps, axis=0)
+        self.activities = np.stack(traces, axis=0)
         
-        footprints = np.stack(spatial_maps, axis=0)
-        activities = np.stack(traces, axis=0)
+        return self.footprints, self.activities
 
-        self.footprints = footprints
-        self.activities = activities
+    def _generate_initial_cell_definitions(self):
+        """Generates random parameters for all cells once."""
+        self.cell_metadata = []
+        
+        # Create parameters for Small and Large neurons
+        sizes_small = np.random.uniform(self.s_neuron_px[0], self.s_neuron_px[1], self.num_small_neurons)
+        sizes_large = np.random.uniform(self.l_neuron_px[0], self.l_neuron_px[1], self.num_large_neurons)
+        all_sizes = np.concatenate((sizes_small, sizes_large))
+        
+        
+        glia_thicks = np.random.uniform(self.glia_thickness_um[0], self.glia_thickness_um[1], len(all_sizes))
 
-        return footprints, activities
-
-
-    def change_footprints_position(
-        self,
-        ) -> np.ndarray:
-        print(Hello)
+        for i in range(len(all_sizes)):
+            self.cell_metadata.append({
+                "y": np.random.randint(0, self.height_px),
+                "x": np.random.randint(0, self.width_px),
+                "size": all_sizes[i],
+                "aspect_ratio": np.random.uniform(0.8, 1.2),
+                "angle": np.random.uniform(0, 90),
+                "glia_thick": glia_thicks[i]
+            })
 
     def _apply_motion_artifact(
             self, 
@@ -706,6 +697,91 @@ class DRGtissueModel:
 
         return fig
     
+
+    def perturb_positions(
+        self, 
+        target_indices: list[int], 
+        angle_deg: float | None = None, 
+        shift_px: float | None = None
+        ):
+        """
+        Shifts specific neurons by a defined or random vector, then triggers a rebuild.
+
+        Args:
+            target_indices (list[int]): A list of indices corresponding to the neurons 
+                                        in `self.cell_metadata` that should be moved.
+            angle_deg (float | None): The direction of movement in degrees (0-360). 
+                                      0 is East (Right), 90 is South (Down).
+                                      If None, a random angle is chosen for each neuron.
+            shift_px (float | None): The exact distance to move in pixels.
+                                     If None, a random distance is chosen between 1px 
+                                     and the maximum distance possible before hitting 
+                                     the image edge along the chosen angle.
+        """
+        if not self.cell_metadata:
+            self._generate_cell_definitions()
+
+        logger.info(f"Perturbing positions of {len(target_indices)} neurons...")
+
+        for idx in target_indices:
+            # Validate index
+            if idx < 0 or idx >= len(self.cell_metadata):
+                logger.warning(f"Index {idx} is out of bounds. Skipping.")
+                continue
+
+            cell = self.cell_metadata[idx]
+            curr_x, curr_y = cell["x"], cell["y"]
+
+            # 1. Determine Angle (Theta)
+            if angle_deg is not None:
+                theta = np.deg2rad(angle_deg)
+            else:
+                theta = np.random.uniform(0, 2 * np.pi)
+
+            # Calculate vector components (Unit vector)
+            dx_unit = np.cos(theta)
+            dy_unit = np.sin(theta)
+
+            # 2. Determine Shift Magnitude (Distance)
+            if shift_px is not None:
+                dist = shift_px
+            else:
+                # Calculate maximum distance to the edge along this specific vector
+                candidates = []
+                
+                # Check distance to X boundaries (0 and width)
+                # If moving right (dx > 0), limit is width. If moving left (dx < 0), limit is 0.
+                if dx_unit > 0:
+                    candidates.append((self.width_px - curr_x) / dx_unit)
+                elif dx_unit < 0:
+                    candidates.append((0 - curr_x) / dx_unit)
+                
+                # Check distance to Y boundaries (0 and height)
+                # If moving down (dy > 0), limit is height. If moving up (dy < 0), limit is 0.
+                if dy_unit > 0:
+                    candidates.append((self.height_px - curr_y) / dy_unit)
+                elif dy_unit < 0:
+                    candidates.append((0 - curr_y) / dy_unit)
+
+                # The valid max distance is the smallest positive distance to any wall
+                max_dist = min(candidates) if candidates else 0
+                
+                # Handle edge case where neuron is already on the edge
+                if max_dist < 1.0:
+                    dist = 0.0
+                else:
+                    dist = np.random.uniform(1.0, max_dist)
+
+            # 3. Apply the shift
+            new_x = curr_x + (dist * dx_unit)
+            new_y = curr_y + (dist * dy_unit)
+
+            # Final safety clip to ensure floating point math didn't push it slightly over
+            self.cell_metadata[idx]["x"] = np.clip(new_x, 0, self.width_px)
+            self.cell_metadata[idx]["y"] = np.clip(new_y, 0, self.height_px)
+
+        # FORCE REBUILD of footprints with new coordinates
+        self.build_image()
 
 
 

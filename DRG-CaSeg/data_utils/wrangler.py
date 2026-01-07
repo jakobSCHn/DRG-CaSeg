@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def load_video(
+    id: str,
     filename: str | Path,
     ):
 
@@ -30,7 +31,10 @@ def flatten_video(
 
     flat_video = video.reshape(video.shape[0], -1)
 
-    return flat_video
+    return {
+        "id": id,
+        "data": flat_video
+    }
 
 
 def scale_video(
@@ -154,68 +158,67 @@ def correct_motion(
     return corrected_video
 
 
-
-def scale_video_to_memmap(
-    czi_filename: Path, 
-    memmap_filename: Path, 
-    chunk_size: int = 100,
-    min_intensity: int = 0, 
-    max_intensity: int = 255
+def load_synthetic_drg_video(
+    params
     ):
     """
-    Streams a CZI file, scales it chunk by chunk, and saves to a numpy memmap file.
+    Wrapper to bridge the YAML configuration with the DRGtissueModel class.
+    Handles seeding, initialization, and optional position perturbation.
     """
-    logger.info(f"Opening CZI file: {czi_filename}")
-    with czifile.CziFile(czi_filename) as czi:
-        # Get shape info
-        # CZI shape is complex (e.g., [1, 1, T, C, Z, Y, X, 0])
-        # We'll rely on np.squeeze to get it to (T, H, W) as in your code
-        temp_arr = czi.asarray(slice(0, 1)) # Load one frame to get squeezed shape
-        squeezed_shape = np.squeeze(temp_arr).shape
-        
-        if len(squeezed_shape) != 3:
-             raise ValueError(f"Expected squeezed video to be 3D (T, H, W), but got {squeezed_shape}")
-        
-        # Get full video shape
-        # We assume the 'T' dimension is czi.shape[2] based on CZI standards
-        total_frames = czi.shape[2] 
-        H, W = squeezed_shape[1], squeezed_shape[2]
-        final_shape = (total_frames, H, W)
-        logger.info(f"Total frames: {total_frames}, H: {H}, W: {W}")
-
-    # Create the output memmap file
-    # This file is created on disk and backed by memory
-    logger.info(f"Creating memmap file: {memmap_filename} with shape {final_shape}")
-    scaled_vid_memmap = np.memmap(
-        memmap_filename, 
-        dtype=np.float32, 
-        mode='w+', 
-        shape=final_shape
-    )
     
-    # Process in chunks
-    for start_frame in range(0, total_frames, chunk_size):
-        end_frame = min(start_frame + chunk_size, total_frames)
-        logger.info(f"Processing frames {start_frame} to {end_frame}...")
-        
-        # Load one chunk from CZI file
-        # We need to construct the correct slice object for czi.asarray
-        # e.g., (slice(None), slice(None), slice(start, end), ...)
-        czi_slice = (slice(None),) * 2 + (slice(start_frame, end_frame),) + (slice(None),) * (czi.ndim - 3)
+    seed = params.get("seed", None)
+    if seed is not None:
+        np.random.seed(seed)
+        random.seed(seed)
+        logger.info(f"Initialized synthetic generator with Seed: {seed}")
 
-        with czifile.CziFile(czi_filename) as czi:
-             chunk = czi.asarray(czi_slice)
-             chunk = np.squeeze(chunk).astype(np.float32)
-        
-        # Apply your scaling logic from scale_video
-        np.clip(chunk, a_min=min_intensity, a_max=max_intensity, out=chunk)
-        chunk -= min_intensity
-        chunk /= (max_intensity - min_intensity)
-        
-        # Write the scaled chunk to the memmap file
-        scaled_vid_memmap[start_frame:end_frame, :, :] = chunk
+    # 2. Separate Model Params from Wrapper Params
+    # We remove keys that the DRGtissueModel constructor doesn't know about
+    wrapper_specific_keys = ["seed", "perturbation", "id"]
+    model_params = {k: v for k, v in params.items() if k not in wrapper_specific_keys}
     
-    # Flush changes to disk
-    scaled_vid_memmap.flush()
-    logger.info("Memmap file created and scaled.")
-    return scaled_vid_memmap, final_shape
+    # Initialize the model
+    model = DRGtissueModel(**model_params)
+
+    # 3. Build the initial "Base" state
+    # This generates the default neurons using the seed provided
+    model.build_image()
+
+    # 4. Apply Modifications (The "Alter Positions" logic)
+    if "perturbation" in params:
+        perturb_conf = params["perturbation"]
+        
+        # Extract arguments with safe defaults
+        target_indices = perturb_conf.get("target_indices", [])
+        angle_deg = perturb_conf.get("angle_deg", None)
+        shift_px = perturb_conf.get("shift_px", None)
+
+        if target_indices:
+            logger.info(f"Applying perturbation to indices: {target_indices}")
+            model.perturb_positions(
+                target_indices=target_indices,
+                angle_deg=angle_deg,
+                shift_px=shift_px
+            )
+        else:
+            logger.warning("Perturbation instructions found, but 'target_indices' was empty.")
+
+    # 5. Render the final video
+    logger.info("Rendering video frames...")
+    video_data = model.render_video()
+
+    # 6. Return standardized dataset structure
+    # We include the 'id' from params if available, otherwise generic default
+    dataset_id = params.get("id", f"synthetic_{seed}")
+    
+    return {
+        "id": dataset_id,
+        "data": video_data,
+        "meta": {
+            "fps": model.fps,
+            "seed": seed,
+            "ground_truth_footprints": model.footprints, 
+            "ground_truth_traces": model.activities,
+            "cell_metadata": model.cell_metadata
+        }
+    }

@@ -1,4 +1,4 @@
-experiment_name: "test_01"
+experiment_name: "test_02"
 
 dataset:
   - id: "DRG_CaSeg_test"
@@ -6,8 +6,6 @@ dataset:
     params:
       filename: "/mnt/c/Users/jakschneid0621/OneDrive - AO Foundation/Documents/Data/DRG slice calcium-B1.czi"
       test_param: 42
-  - id: "test_shift"
-    loader: data_utils.
 
 preprocessing:
   - name: "scaling"
