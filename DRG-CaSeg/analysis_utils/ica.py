@@ -276,7 +276,8 @@ def extract_rois_and_traces(
             
     logger.info(f"Extraction complete: Found {len(final_roi_masks)} ROIs.")
     
-    # Convert list of traces to a 2D numpy array
+    # Convert lists of results to a 2D numpy array
+    final_roi_masks_array = np.array(final_roi_masks)
     final_roi_traces_array = np.array(final_roi_traces)
     
-    return final_roi_masks, final_roi_traces_array
+    return final_roi_masks_array, final_roi_traces_array

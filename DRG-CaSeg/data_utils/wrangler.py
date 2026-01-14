@@ -146,7 +146,7 @@ def correct_motion(
 
 
 def load_drg_model_video(
-    params
+    **params
     ):
     """
     Wrapper to bridge the YAML configuration with the DRGtissueModel class.

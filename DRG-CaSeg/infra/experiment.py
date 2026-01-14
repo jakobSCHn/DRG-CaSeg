@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 @attrs.define
 class Experiment:
     config: dict
+    config_path: str
     run_id: str = attrs.field(factory=lambda: datetime.now().strftime("%Y%m%d_%H%M%S"))
 
 
@@ -22,7 +23,7 @@ class Experiment:
         if cfg is None:
             raise ValueError(f"The config file at {path} is empty.")
         
-        return cls(config=cfg)
+        return cls(config=cfg, config_path=path)
 
 
     def run(self):
@@ -37,17 +38,25 @@ class Experiment:
         for data_cfg in data_cfgs:
             #Load the data for the experiment
             logger.info(f"Loading dataset ID: {data_cfg["id"]}")
-            loader = configure_callable(data_cfg["loader"], data_cfg.get("params", {}))
+            loader = configure_callable(
+                id=data_cfg["id"],
+                import_path=data_cfg["loader"],
+                params=data_cfg.get("params", {}),
+            )
             payload = loader()
 
             data = payload["data"]
-            gt = payload["gt"]
+            gt = payload.get("gt", [])
 
             #Preprocess the loaded data
             if steps_pre:
                 for step in steps_pre:
-                    logger.info(f"Preprocessing: {step["name"]}")
-                    processor = configure_callable(step["function"], step.get("params", {}))
+                    logger.info(f"Preprocessing: {step["id"]}")
+                    processor = configure_callable(
+                        id=step["id"],
+                        import_path=step["function"],
+                        params=step.get("params", {}),
+                    )
                     data = processor(data)
             else:
                 logger.warning(f"No Data preprocessing applied.")
@@ -55,12 +64,17 @@ class Experiment:
             #Data Analysis
             for ana in analysis_methods:    
                 logger.info(f"Analyzing data with Analysis ID: {ana["id"]}")
-                analyzer = configure_callable(ana["function"], ana.get("params", {}))
+                analyzer = configure_callable(
+                    id=ana["id"],
+                    import_path=ana["function"],
+                    params=ana.get("params", {}),
+                )
                 results = analyzer(data)
 
                 save_path = setup_experiment_folder(
                     run_id=self.run_id,
-                    config_path=self.config,
+                    config_path=self.config_path,
+                    data_id=data_cfg["id"],
                     ana_id=ana["id"],
                 )
 
@@ -71,10 +85,14 @@ class Experiment:
                     save_filepath=save_path / "inference.mp4"
                 )
 
-                if evaluation_methods:
+                if evaluation_methods and len(gt) > 0:
                     for eva in evaluation_methods:
                         logger.info(f"Evaluating with Evaluation ID: {eva["id"]}")
-                        evaluator = configure_callable(eva["function"], eva.get("params", {}))
+                        evaluator = configure_callable(
+                            id=eva["id"],
+                            import_path=eva["function"],
+                            params=eva.get("params", {}),
+                        )
                         metrics = evaluator(pred=results["masks"], gt=gt)
                         logger.info(f"Evaluation Results for {data_cfg['id']}:")
                         logger.info(f"  Precision: {metrics['precision']:.4f}")

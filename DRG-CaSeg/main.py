@@ -7,6 +7,7 @@ from infra.experiment import Experiment
 import logging
 from config import setup_logging
 from utils import seed_everything
+
 setup_logging()
 logger = logging.getLogger(__name__)
 

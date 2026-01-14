@@ -38,7 +38,7 @@ def generate_gaussian_blob(
 
 
 def generate_gaussian_ring(
-    boundary_mask: np.ndarray[np.bool],
+    boundary_mask: np.ndarray[bool],
     thickness: float,
     thickness_amplitude: float
     ) -> np.ndarray:

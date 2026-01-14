@@ -1,3 +1,10 @@
+import PySide6.QtGui
+import PySide6.QtWidgets
+
+# Manually map QApplication to QtGui so the debugger finds it
+PySide6.QtGui.QApplication = PySide6.QtWidgets.QApplication
+
+
 import numpy as np
 import logging
 import matplotlib.pyplot as plt
@@ -434,7 +441,7 @@ def render_inference_video(
     if not out.isOpened():
         raise IOError(f"Could not open video writer for {save_filepath}")
 
-    logger.info(f"Rendering {n_frames} frames to {save_filepath} using OpenCV...")
+    logger.info(f"Rendering {n_frames} frames to {save_filepath}.")
 
 
     for frame_idx in range(n_frames):

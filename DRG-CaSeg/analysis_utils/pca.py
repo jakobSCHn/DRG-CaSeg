@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 def cellsort_pca(
     video: np.ndarray,
-    pcs: int = None,
+    pcs: int | tuple[int, int] | list[int, int] = None,
     ):
     """
     Reads TIFF movie data and performs SVD/PCA dimensional reduction.
@@ -80,11 +80,10 @@ def cellsort_pca(
         mixedsig = _reload_moviedata(nt, mov.T, mixedfilters, cov_evals)
 
     # Infer the actual number of PCs returned (length of the slice) for reshaping
-    n_pcs_out = mixedfilters.shape[0] if mixedfilters.ndim == 2 else mixedfilters.shape[-1]
+    n_pcs_out = pcs[1] - pcs[0] if isinstance(pcs, (list, tuple)) else n_pcs
     
     # Reshape spatial filters
     mixedfilters = mixedfilters.reshape((pixh, pixw, n_pcs_out), order="F")
-
     
     logger.info(f"CellsortPCA: saving data and exiting.")
 

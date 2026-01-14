@@ -29,11 +29,14 @@ def get_object_from_path(
 
 
 def configure_callable(
+    id,
     import_path,
     params,
     ):
     obj_def = get_object_from_path(import_path)
-        
+    
+    params["id"] = id
+
     sig = inspect.signature(obj_def)
     has_kwargs = any(param.kind ==param.VAR_KEYWORD for param in sig.parameters.values())
 
@@ -78,20 +81,23 @@ def get_config_files(
 def setup_experiment_folder(
     run_id: str,
     config_path: str,
+    data_id: str,
     ana_id: str | None = None,
     ):
 
     p = Path(config_path)
     if ana_id:
-        output_dir_name = f"{p.stem}_{run_id}_{ana_id}"
+        output_dir_name = f"{p.stem}_{run_id}_{data_id}_{ana_id}"
     else:
-        output_dir_name = f"{p.stem}_{run_id}_{ana_id}"
+        output_dir_name = f"{p.stem}_{run_id}_{data_id}"
     output_dir = Path("results") / output_dir_name
 
     output_dir.mkdir(parents=True)
     shutil.copy(p, output_dir / "config.yaml")
 
     logger.info(f"Initialized Experiment folder: {p.stem}")
+
+    return output_dir
 
 
 def save_dict_to_yaml(

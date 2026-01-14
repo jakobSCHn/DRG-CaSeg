@@ -1,0 +1,51 @@
+experiment_name: "test_pipeline_00"
+
+dataset:
+  - id: "cut_test_vid"
+    loader: data_utils.wrangler.load_video
+    params:
+      filename: "/home/jaschneider/projects/DRG-CaSeg/data/test_00_3rdB2.czi"
+  - id: "test_syn"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      seed: 42
+      fps: 33.33
+      duration_s: 7.5
+      num_small_neurons: 0
+      num_large_neurons: 7
+  - id: "test_syn_shift"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      seed: 42
+      fps: 33.33
+      duration_s: 7.5
+      num_small_neurons: 0
+      num_large_neurons: 7
+      perturbation:
+        target_indices: [0, 1, 4]
+        angle_deg: [0, 90, 180]
+        shift_px: [50, 50, 50]
+
+
+preprocessing:
+  - id: "scaling"
+    function: data_utils.wrangler.scale_video
+    params:
+      max_intensity: 200 
+
+analysis:
+  - id: "ica_mukamel"
+    function: analysis_utils.workflow.run_ica
+    params:
+      n_pcs: 20
+  - id: "ica_mukamel_wo_1st_pc"
+    function: analysis_utils.workflow.run_ica
+    params:
+      n_pcs: [1, 20]
+
+evaluation:
+  - id: "IoU"
+    function: analysis_utils.workflow.evaluate_segmentation
+    params:
+      iou_threshold: 0.5
+  

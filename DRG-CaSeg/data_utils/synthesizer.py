@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from scipy.ndimage import binary_erosion, affine_transform
 from pathlib import Path
 
-import ops
+import data_utils.ops as ops
 
 
 import logging
@@ -723,7 +723,7 @@ class DRGtissueModel:
 
         logger.info(f"Perturbing positions of {len(target_indices)} neurons...")
 
-        for idx in target_indices:
+        for i, idx in enumerate(target_indices):
             # Validate index
             if idx < 0 or idx >= len(self.cell_metadata):
                 logger.warning(f"Index {idx} is out of bounds. Skipping.")
@@ -733,8 +733,8 @@ class DRGtissueModel:
             curr_x, curr_y = cell["x"], cell["y"]
 
             # 1. Determine Angle (Theta)
-            if angle_deg is not None:
-                theta = np.deg2rad(angle_deg)
+            if angle_deg[i] is not None:
+                theta = np.deg2rad(angle_deg[i])
             else:
                 theta = np.random.uniform(0, 2 * np.pi)
 
@@ -743,8 +743,8 @@ class DRGtissueModel:
             dy_unit = np.sin(theta)
 
             # 2. Determine Shift Magnitude (Distance)
-            if shift_px is not None:
-                dist = shift_px
+            if shift_px[i] is not None:
+                dist = shift_px[i]
             else:
                 # Calculate maximum distance to the edge along this specific vector
                 candidates = []
