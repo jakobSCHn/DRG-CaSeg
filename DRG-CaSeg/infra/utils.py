@@ -4,13 +4,48 @@ import glob
 import inspect
 import functools
 import shutil
-import numpy as np
-import yaml
+import multiprocessing
 
 from pathlib import Path
 
 import logging
 logger = logging.getLogger(__name__)
+
+
+def setup_cluster(
+    backend: str = "multiprocessing",
+    n_processes: int = None,
+    ignore_preexisting: bool = False,
+    maxtasksperchild: int = None
+    ):
+
+    if n_processes is None:
+        n_processes = max(int(psutil.cpu_count() - 1), 1) 
+
+    if backend == "multiprocessing":
+        if len(multiprocessing.active_children()) > 0:
+            if ignore_preexisting:
+                logger.warning("Found an existing multiprocessing pool. "
+                               "This is often indicative of an already-running CaImAn cluster. "
+                               "You have configured the cluster setup to not raise an exception.")
+            else:
+                raise Exception(
+                    "A cluster is already running. Terminate with dview.terminate() if you want to restart.")
+        
+        dview = multiprocessing.Pool(n_processes, maxtasksperchild=maxtasksperchild)
+
+    elif backend == "single":
+        dview = None
+        n_processes = 1
+
+    else:
+        raise Exception("Unknown Backend")
+
+    return {
+        "cluster": dview,
+        "n_processes": n_processes
+    }
+
 
 def get_object_from_path(
     import_path
@@ -32,10 +67,12 @@ def configure_callable(
     id,
     import_path,
     params,
+    context: dict = None,
     ):
     obj_def = get_object_from_path(import_path)
     
     params["id"] = id
+    context = context or {}
 
     sig = inspect.signature(obj_def)
     has_kwargs = any(param.kind ==param.VAR_KEYWORD for param in sig.parameters.values())
@@ -51,8 +88,18 @@ def configure_callable(
         if dropped_keys:
             logger.warning(f"Dropped params for {import_path}: {dropped_keys}")
 
-    return functools.partial(obj_def, **valid_params)
+    if has_kwargs:
+        valid_context = context
+    else:
+        #Only keep context variables (cluster, n_processes) if the function explicitly asks for them
+        valid_context = {
+            k: v for k, v in context.items()
+            if k in sig.parameters
+        }
 
+    kwargs = {**valid_params, **valid_context}
+
+    return functools.partial(obj_def, **kwargs)
 
 
 def get_config_files(
@@ -98,37 +145,3 @@ def setup_experiment_folder(
     logger.info(f"Initialized Experiment folder: {p.stem}")
 
     return output_dir
-
-
-def save_dict_to_yaml(
-    data: dict,
-    save_path: Path,
-    ):
-    """
-    Saves a dictionary to a YAML file, handling pathlib.Path objects
-    and converting common Numpy types to native Python types.
-    """
-    #Helper to convert numpy types for YAML safety
-    def convert_numpy(obj):
-        if isinstance(obj, np.integer):
-            return int(obj)
-        elif isinstance(obj, np.floating):
-            return float(obj)
-        elif isinstance(obj, np.ndarray):
-            return obj.tolist()
-        return obj
-
-    #Recursively clean the dictionary
-    def clean_dict(d):
-        new_d = {}
-        for k, v in d.items():
-            if isinstance(v, dict):
-                new_d[k] = clean_dict(v)
-            else:
-                new_d[k] = convert_numpy(v)
-        return new_d
-
-    sanitized_data = clean_dict(data)
-
-    with open(save_path, "w") as f:
-        yaml.dump(sanitized_data, f, sort_keys=False, default_flow_style=False)

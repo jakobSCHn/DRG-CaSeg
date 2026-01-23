@@ -1,5 +1,6 @@
 import logging
 import numpy as np
+import caiman as cm
 
 from scipy.optimize import linear_sum_assignment
 
@@ -10,7 +11,7 @@ from analysis_utils.metrics import compute_iou_matrix
 logger = logging.getLogger(__name__)
 
 def run_ica(
-    vid_norm,
+    mov: cm.movie,
     n_pcs: int | tuple[int, int] = 20,
     mu=0.5,
     maxrounds=200,
@@ -22,7 +23,7 @@ def run_ica(
     """
     
     mixedsig, mixedfilters, cov_evals, cov_trace, movm, movtm = cellsort_pca(
-        vid_norm, 
+        mov.astype(np.float32), 
         pcs=n_pcs
     )
 

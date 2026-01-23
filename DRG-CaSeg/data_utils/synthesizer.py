@@ -701,8 +701,8 @@ class DRGtissueModel:
     def perturb_positions(
         self, 
         target_indices: list[int], 
-        angle_deg: float | None = None, 
-        shift_px: float | None = None
+        angle_deg: list|  tuple | None = None, 
+        shift_px: list | tuple | None = None,
         ):
         """
         Shifts specific neurons by a defined or random vector, then triggers a rebuild.

@@ -2,7 +2,8 @@ import yaml
 import attrs
 
 from datetime import datetime
-from infra.utils import configure_callable, setup_experiment_folder, save_dict_to_yaml
+from utils import save_dict_to_yaml
+from infra.utils import configure_callable, setup_experiment_folder
 from data_utils.plotter import render_inference_video
 
 import logging
@@ -26,7 +27,10 @@ class Experiment:
         return cls(config=cfg, config_path=path)
 
 
-    def run(self):
+    def run(
+            self,
+            runtime_context: dict = None,
+        ):
         logger.info(f"Running: {self.config['experiment_name']}")
         
         #Load experiment configurations
@@ -42,6 +46,7 @@ class Experiment:
                 id=data_cfg["id"],
                 import_path=data_cfg["loader"],
                 params=data_cfg.get("params", {}),
+                context=runtime_context,
             )
             payload = loader()
 
@@ -56,6 +61,7 @@ class Experiment:
                         id=step["id"],
                         import_path=step["function"],
                         params=step.get("params", {}),
+                        context=runtime_context,
                     )
                     data = processor(data)
             else:
@@ -68,6 +74,7 @@ class Experiment:
                     id=ana["id"],
                     import_path=ana["function"],
                     params=ana.get("params", {}),
+                    context=runtime_context,
                 )
                 results = analyzer(data)
 
@@ -92,6 +99,7 @@ class Experiment:
                             id=eva["id"],
                             import_path=eva["function"],
                             params=eva.get("params", {}),
+                            context=runtime_context,
                         )
                         metrics = evaluator(pred=results["masks"], gt=gt)
                         logger.info(f"Evaluation Results for {data_cfg['id']}:")

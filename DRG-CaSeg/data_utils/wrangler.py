@@ -1,19 +1,28 @@
 import czifile
+import os
 import numpy as np
 import logging
 import cv2 as cv
 import random
+import xmltodict
+import caiman as cm
+import uuid
 
 from skimage.feature import ORB, match_descriptors
 from skimage.measure import ransac
 from skimage.transform import AffineTransform, warp
 from pathlib import Path
+
 from data_utils.synthesizer import DRGtissueModel
+from caiman.motion_correction import MotionCorrect
+from caiman.source_extraction.cnmf import params
+
+from analysis_utils.caiman import get_default_params
 
 logger = logging.getLogger(__name__)
 
 
-def load_video(
+def load_czi(
     id: str,
     filename: str | Path,
     ):
@@ -27,7 +36,6 @@ def load_video(
     }
 
 
-
 def flatten_video(
     video: np.ndarray
     ):
@@ -38,17 +46,23 @@ def flatten_video(
 
 
 def scale_video(
-    video: np.ndarray,
+    mov: cm.movie,
     min_intensity: int = 0,
     max_intensity: int = 255
     ):
+    
+    #clip the pixel brightness to the allowed values
+    np.clip(mov, a_min=min_intensity, a_max=max_intensity, out=mov)
 
-    normalized_video = video.astype(np.float32).copy()
-    normalized_video = np.clip(normalized_video, a_min=min_intensity, a_max=max_intensity)
+    #perform actual normalization (modify in place to save RAM)
+    mov -= min_intensity
+    mov /= (max_intensity - min_intensity)
 
-    normalized_video = (normalized_video - min_intensity) / (max_intensity - min_intensity)
-    return normalized_video
+    #throw a type error if it's not a cm.movie, as metadata will be lost
+    if not isinstance(mov, cm.movie):
+        TypeError("wrong type")
 
+    return mov
 
 
 def save_video(
@@ -70,7 +84,7 @@ def save_video(
     out.release()
 
 
-def correct_motion(
+def correct_motion_legacy(
     video: np.ndarray,
     ):
     
@@ -146,6 +160,7 @@ def correct_motion(
 
 
 def load_drg_model_video(
+        
     **params
     ):
     """
@@ -207,3 +222,135 @@ def load_drg_model_video(
             "cell_metadata": model.cell_metadata
         }
     }
+
+
+def load_czi_to_caiman(
+    id,
+    filename,
+    fr=None,
+    start_time=0,
+    meta_data=None,
+    ):
+    """
+    Loads a .czi file, massages the dimensions, and returns a fully initialized
+    caiman.movie object.
+    
+    Args:
+        file_name (str): Path to the .czi file.
+        fr (float, optional): Frame rate. If None, attempts to read from CZI metadata.
+        start_time (float): Start time in seconds.
+        meta_data (dict): Optional manual metadata.
+
+    Returns:
+        caiman.movie: The initialized movie object.
+    """
+    
+    if not os.path.exists(filename):
+        raise FileNotFoundError(f"File {filename} not found!")
+
+    with czifile.CziFile(filename) as czi:
+        raw_image_data = czi.asarray()
+        
+        if meta_data is None:
+            md_xml = czi.metadata()
+            md = xmltodict.parse(md_xml, attr_prefix="")
+
+
+        if fr is None and meta_data is None:
+            #Extract the offsets the frames were taken at to calculate the frame rate
+            img_timepoints = md["ImageDocument"]["Metadata"]["Information"]["Image"]["Dimensions"]["T"]["Positions"]["List"]["Offsets"]
+            num_img_timepoints = np.fromstring(img_timepoints, sep=" ") #Cast the timestamps to be numerical instead of being formatted as a string
+            median_diff = np.median(np.diff(num_img_timepoints))
+            fr = 1 / median_diff
+        else:
+            fr = meta_data["fr"]
+
+    
+    image_data = raw_image_data.squeeze()
+    # Handling Multichannel or Multi-Z stacks
+    # If the data is still > 3 dimensions after squeezing (e.g. Time, Z, Y, X),
+    # you might need to select a specific plane or channel.
+    # This logic assumes the standard CaImAn input of (Time, Y, X) 
+    if image_data.ndim > 3:
+        raise ValueError(
+            f"Input data has {image_data.ndim} dimensions with shape {image_data.shape}. "
+            "CaImAn movie objects expect 3 dimensions (Time, Height, Width). "
+        )
+
+
+    movie_obj = cm.movie(
+        image_data.astype(np.float32), #Convert to float32 as CaImAn prefers floats for processing
+        fr=fr,
+        start_time=start_time,
+        file_name=os.path.basename(filename),
+        meta_data=meta_data
+    )
+
+    return {
+        "id": id,
+        "data": movie_obj,
+    }
+
+
+def get_default_params_motion():
+    #motion correction parameters
+    pw_rigid = False         # flag for performing piecewise-rigid motion correction (otherwise just rigid)
+    gSig_filt = (6, 6)       # sigma for high pass spatial filter applied before motion correction, used in 1p data
+    max_shifts = (5, 5)      # maximum allowed rigid shift
+    strides = (48, 48)       # start a new patch for pw-rigid motion correction every x pixels
+    overlaps = (24, 24)      # overlap between patches (size of patch = strides + overlaps)
+    max_deviation_rigid = 3  # maximum deviation allowed for patch with respect to rigid shifts
+    border_nan = "copy"      # replicate values along the boundaries
+
+    mc_dict = {
+        "pw_rigid": pw_rigid,
+        "max_shifts": max_shifts,
+        "gSig_filt": gSig_filt,
+        "strides": strides,
+        "overlaps": overlaps,
+        "max_deviation_rigid": max_deviation_rigid,
+        "border_nan": border_nan
+    }
+
+    parameters = params.CNMFParams(params_dict=mc_dict)
+    return parameters.get_group("motion")
+
+
+def correct_motion(
+    mov: cm.movie,
+    cluster = None,
+    **params,
+    ):
+    unique_id = uuid.uuid4().hex
+    temp_filename = f"temp_mc_{unique_id}.mmap"
+    
+    fname_path = mov.save(temp_filename, order="C")
+
+    #remove the "id" parameter as it's not used in caiman but should be present at function call
+    params.pop("id")
+    parameters = get_default_params()
+    #get the framerate directly form the video to always be accurate
+    try:
+        fr_params = {"fr": mov.fr}
+    except AttributeError:
+        fr_params = {"fr": 30}
+        logger.warning(f"Movie frame rate hasn't been specified. Using default of {fr_params['fr']} Hz")
+
+    parameters.change_params(fr_params)
+    if params is not None:
+        parameters.change_params(params_dict=params)
+
+    try:
+        corrector = MotionCorrect(fname=fname_path, dview=cluster, **parameters.get_group("motion"))
+        corrector.motion_correct(save_movie=False)
+        corrected_mov = corrector.apply_shifts_movie(fname_path)
+        
+        return corrected_mov
+    
+    finally:
+        #Since we created the file, we are responsible for deleting it
+        if os.path.exists(fname_path):
+            try:
+                os.remove(fname_path)
+            except PermissionError:
+                logger.warning(f"Could not delete temp file {fname_path} (still in use).")
