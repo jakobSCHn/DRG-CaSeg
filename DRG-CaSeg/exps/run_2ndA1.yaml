@@ -4,7 +4,7 @@ dataset:
   - id: "2ndA1"
     loader: data_utils.wrangler.load_czi_to_caiman
     params:
-      filename: "/home/jaschneider/projects/DRG-CaSeg/data/test_00_3rdB2.czi"
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/2nd A1.czi"
 
 
 preprocessing:

@@ -258,10 +258,14 @@ def load_czi_to_caiman(
 
         if fr is None and meta_data is None:
             #Extract the offsets the frames were taken at to calculate the frame rate
-            img_timepoints = md["ImageDocument"]["Metadata"]["Information"]["Image"]["Dimensions"]["T"]["Positions"]["List"]["Offsets"]
-            num_img_timepoints = np.fromstring(img_timepoints, sep=" ") #Cast the timestamps to be numerical instead of being formatted as a string
-            median_diff = np.median(np.diff(num_img_timepoints))
-            fr = 1 / median_diff
+            try:
+                img_timepoints = md["ImageDocument"]["Metadata"]["Information"]["Image"]["Dimensions"]["T"]["Positions"]["List"]["Offsets"]
+                num_img_timepoints = np.fromstring(img_timepoints, sep=" ") #Cast the timestamps to be numerical instead of being formatted as a string
+                median_diff = np.median(np.diff(num_img_timepoints))
+                fr = 1 / median_diff
+            except:
+                increment = md["ImageDocument"]["Metadata"]["Information"]["Image"]["Dimensions"]["T"]["Positions"]["Interval"]["Increment"]
+                fr = 1 / float(increment)
         else:
             fr = meta_data["fr"]
 

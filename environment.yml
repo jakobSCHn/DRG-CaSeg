@@ -49,7 +49,7 @@ dependencies:
   - cyrus-sasl=2.1.28
   - dav1d=1.2.1
   - dbus=1.13.6
-  - debugpy=1.8.19
+  - debugpy
   - decorator=5.2.1
   - defusedxml=0.7.1
   - deprecated=1.3.1
@@ -397,6 +397,7 @@ dependencies:
   - zlib-ng=2.2.5
   - zstandard=0.25.0
   - zstd=1.5.7
+  - pip
   - pip:
       - alabaster==1.0.0
       - click==8.3.1
