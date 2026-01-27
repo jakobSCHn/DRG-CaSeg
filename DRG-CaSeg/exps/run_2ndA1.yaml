@@ -1,0 +1,39 @@
+experiment_name: "test_pipeline_10"
+
+dataset:
+  - id: "2ndA1"
+    loader: data_utils.wrangler.load_czi_to_caiman
+    params:
+      filename: "/home/jaschneider/projects/DRG-CaSeg/data/test_00_3rdB2.czi"
+
+
+preprocessing:
+  - id: "scaling"
+    function: data_utils.wrangler.scale_video
+    params:
+      max_intensity: 200
+  - id: "motion_correction"
+    function: data_utils.wrangler.correct_motion
+    params:
+      max_shifts: [6, 6]
+      overlaps: [12, 12]
+      num_frames_split: 200 
+
+analysis:
+  - id: "ica_mukamel"
+    function: analysis_utils.workflow.run_ica
+    params:
+      n_pcs: 20
+  - id: "caiman"
+    function: analysis_utils.caiman.run_cnmfe
+    params:
+      decay_time: 2
+      ring_size_factor: 2
+      min_corr: 0.5
+
+evaluation:
+  - id: "IoU"
+    function: analysis_utils.workflow.evaluate_segmentation
+    params:
+      iou_threshold: 0.5
+  
