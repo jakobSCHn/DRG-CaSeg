@@ -1,33 +1,165 @@
-experiment_name: "test_pipeline_00"
+experiment_name: "check_mu"
 
 dataset:
-  - id: "cut_test_vid"
-    loader: data_utils.wrangler.load_video
-    params:
-      filename: "/home/jaschneider/projects/DRG-CaSeg/data/test_00_3rdB2.czi"
-  - id: "test_syn"
+  - id: "syn_00"
     loader: data_utils.wrangler.load_drg_model_video
     params:
-      seed: 42
-      fps: 33.33
-      duration_s: 7.5
-
+      fps: 30
+      duration_s: 600
+  - id: "syn_01"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 600
+  - id: "syn_02"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 600
+  - id: "syn_03"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 600
+  - id: "syn_04"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 600
+  - id: "syn_05"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 600
+  - id: "syn_06"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 600
+  - id: "syn_07"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 600
+  - id: "syn_08"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 600
+  - id: "syn_09"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 600
+  - id: "syn_10"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 600
+  - id: "syn_11"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 600
+  - id: "syn_12"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 600
+  - id: "syn_13"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 600
+  - id: "syn_14"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 600
+  - id: "syn_15"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 600
+  - id: "syn_16"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 600
+  - id: "syn_17"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 600
+  - id: "syn_18"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 600
+  - id: "syn_19"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 600
 
 preprocessing:
   - id: "scaling"
     function: data_utils.wrangler.scale_video
     params:
-      max_intensity: 200 
+      min_intensity: 0
+      max_intensity: 255 
 
 analysis:
-  - id: "ica_mukamel"
+  - id: "ica_mukamel_mu_0.0"
     function: analysis_utils.workflow.run_ica
     params:
-      n_pcs: 20
-  - id: "ica_mukamel_wo_1st_pc"
+      mu: 0.0
+  - id: "ica_mukamel_mu_0.1"
     function: analysis_utils.workflow.run_ica
     params:
-      n_pcs: [1, 20]
+      mu: 0.1
+  - id: "ica_mukamel_mu_0.2"
+    function: analysis_utils.workflow.run_ica
+    params:
+      mu: 0.2
+  - id: "ica_mukamel_mu_0.3"
+    function: analysis_utils.workflow.run_ica
+    params:
+      mu: 0.3
+  - id: "ica_mukamel_mu_0.4"
+    function: analysis_utils.workflow.run_ica
+    params:
+      mu: 0.4
+  - id: "ica_mukamel_mu_0.5"
+    function: analysis_utils.workflow.run_ica
+    params:
+      mu: 0.5
+  - id: "ica_mukamel_mu_0.6"
+    function: analysis_utils.workflow.run_ica
+    params:
+      mu: 0.6
+  - id: "ica_mukamel_mu_0.7"
+    function: analysis_utils.workflow.run_ica
+    params:
+      mu: 0.7
+  - id: "ica_mukamel_mu_0.8"
+    function: analysis_utils.workflow.run_ica
+    params:
+      mu: 0.8
+  - id: "ica_mukamel_mu_0.9"
+    function: analysis_utils.workflow.run_ica
+    params:
+      mu: 0.9
+  - id: "ica_mukamel_mu_1.0"
+    function: analysis_utils.workflow.run_ica
+    params:
+      mu: 1.0
+
+visualization:
+  - id: "plot_static_output"
+    function: data_utils.plotter.render_summary_image
+    
+
 
 evaluation:
   - id: "IoU"
