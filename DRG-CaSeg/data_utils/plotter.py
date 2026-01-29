@@ -4,9 +4,9 @@ import PySide6.QtWidgets
 # Manually map QApplication to QtGui so the debugger finds it
 PySide6.QtGui.QApplication = PySide6.QtWidgets.QApplication
 
-
 import numpy as np
 import logging
+import matplotlib
 import matplotlib.pyplot as plt
 import cv2
 
@@ -14,8 +14,26 @@ from scipy.ndimage import label
 from skimage.measure import find_contours
 from scipy.stats import zscore
 from pathlib import Path
+from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
+
+@contextmanager
+def suppress_gui():
+    """
+    Temporarily switches the matplotlib backend to 'Agg' to prevent 
+    interactive windows from popping up during figure creation.
+    """
+    #get current backend to restore it later
+    original_backend = matplotlib.get_backend()
+    try:
+        matplotlib.use("Agg", force=True)
+        yield
+    finally:
+        #restore the original backend (e.g., 'Qt5Agg')
+        matplotlib.use(original_backend, force=True)
+
+
 
 def plot_frame(
     vid: np.ndarray,
@@ -467,6 +485,7 @@ def render_inference_video(
     logger.info("Video saved successfully.")
 
 
+@suppress_gui()
 def render_summary_image(
     roi_masks, 
     roi_traces, 
@@ -560,6 +579,6 @@ def render_summary_image(
     ax_trace.spines["left"].set_visible(False)
 
     plt.tight_layout()
-    fig.savefig(save_filepath, dpi=dpi, bbox_inches="tight")
+    fig.savefig(save_filepath / "summary_image.png", dpi=dpi, bbox_inches="tight")
     plt.close(fig)
     logger.info("Summary Image saved successfully.")

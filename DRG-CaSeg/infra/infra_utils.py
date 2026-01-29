@@ -134,7 +134,8 @@ def setup_experiment_folder(
     ):
 
     p = Path(config_path)
-    project_root = Path(__file__).resolve().parents[1]
+    path = Path(__file__)
+    project_root = Path(__file__).resolve().parents[3]
     results_base_dir = project_root / "results"
 
     if ana_id:

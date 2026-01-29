@@ -1,0 +1,137 @@
+experiment_name: "test_check_mu"
+
+dataset:
+  - id: "syn_00"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 6
+  - id: "syn_01"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 6
+  - id: "syn_02"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 6
+  - id: "syn_03"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 6
+  - id: "syn_04"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 6
+  - id: "syn_05"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 6
+  - id: "syn_06"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 6
+  - id: "syn_07"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 6
+  - id: "syn_08"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 6
+  - id: "syn_09"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 6
+  - id: "syn_10"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 6
+  - id: "syn_11"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 6
+  - id: "syn_12"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 6
+  - id: "syn_13"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 6
+  - id: "syn_14"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 6
+  - id: "syn_15"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 6
+  - id: "syn_16"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 6
+  - id: "syn_17"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 6
+  - id: "syn_18"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 6
+  - id: "syn_19"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 6
+
+preprocessing:
+  - id: "scaling"
+    function: data_utils.wrangler.scale_video
+    params:
+      min_intensity: 0
+      max_intensity: 255 
+
+analysis:
+  - id: "ica_mukamel_mu_0.2"
+    function: analysis_utils.workflow.run_ica
+    params:
+      mu: 0.2
+  - id: "ica_mukamel_mu_0.5"
+    function: analysis_utils.workflow.run_ica
+    params:
+      mu: 0.5
+  - id: "ica_mukamel_mu_0.8"
+    function: analysis_utils.workflow.run_ica
+    params:
+      mu: 0.8
+
+visualization:
+  - id: "plot_static_output"
+    function: data_utils.plotter.render_summary_image
+    
+
+
+evaluation:
+  - id: "IoU"
+    function: analysis_utils.workflow.evaluate_segmentation
+    params:
+      iou_threshold: 0.5
+  

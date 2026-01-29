@@ -9,7 +9,9 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-def seed_everything(seed: int):
+def seed_everything(
+    seed: int,
+    ):
     random.seed(seed)
     np.random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
