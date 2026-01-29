@@ -3,8 +3,7 @@ import attrs
 
 from datetime import datetime
 from utils import save_dict_to_yaml
-from infra.utils import configure_callable, setup_experiment_folder
-from data_utils.plotter import render_inference_video
+from infra.infra_utils import configure_callable, setup_experiment_folder
 
 import logging
 logger = logging.getLogger(__name__)
@@ -81,6 +80,7 @@ class Experiment:
                 results = analyzer(data)
 
                 save_path = setup_experiment_folder(
+                    experiment_name=self.name,
                     run_id=self.run_id,
                     config_path=self.config_path,
                     data_id=data_cfg["id"],
@@ -93,11 +93,14 @@ class Experiment:
                         plotter = configure_callable(
                             id=vis["id"],
                             import_path=vis["function"],
-                            roi_masks=vis["masks"],
-                            roi_traces=vis["traces"],
-                            save_filepath=save_path,
-                            data=data,
-                            params=ana.get("params", {})
+                            params={
+                                **vis.get("params", {}),
+                                "roi_masks": results["masks"],
+                                "roi_traces": results["traces"],
+                                "save_filepath": save_path,
+                                "data": data,
+                            },
+                            context=runtime_context,
                         )
                         plotter()
 
@@ -119,4 +122,4 @@ class Experiment:
                 else:
                     logger.warning("No Evaluation configured.")
 
-        logger.info(f"Experiment {self.run_id} has been completed successfully!")
+        logger.info(f"Experiment {self.name} has been completed successfully!")

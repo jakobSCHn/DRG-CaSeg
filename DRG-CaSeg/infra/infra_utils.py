@@ -134,15 +134,18 @@ def setup_experiment_folder(
     ):
 
     p = Path(config_path)
+    project_root = Path(__file__).resolve().parents[1]
+    results_base_dir = project_root / "results"
+
     if ana_id:
         output_dir_name = f"{p.stem}_{run_id}_{data_id}_{ana_id}"
     else:
         output_dir_name = f"{p.stem}_{run_id}_{data_id}"
-    output_dir = Path("results") / f"{experiment_name}_{run_id}" / output_dir_name
+    output_dir = results_base_dir / f"{experiment_name}_{run_id}" / output_dir_name
 
     output_dir.mkdir(parents=True)
     shutil.copy(p, output_dir / "config.yaml")
 
-    logger.info(f"Initialized Experiment folder: {p.stem}")
+    logger.info(f"Initialized Experiment folder: {output_dir}")
 
     return output_dir

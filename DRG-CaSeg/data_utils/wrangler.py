@@ -160,7 +160,6 @@ def correct_motion_legacy(
 
 
 def load_drg_model_video(
-        
     **params
     ):
     """
@@ -175,7 +174,7 @@ def load_drg_model_video(
         logger.info(f"Initialized synthetic generator with Seed: {seed}")
 
     #Separate Model Params from Wrapper Params and remove what's not meant for the constructor
-    wrapper_specific_keys = ["seed", "perturbation", "id"]
+    wrapper_specific_keys = ["id", "seed", "perturbation", "cluster", "n_processes"]
     model_params = {k: v for k, v in params.items() if k not in wrapper_specific_keys}
     
     #Initialize the model

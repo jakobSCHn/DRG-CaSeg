@@ -470,7 +470,7 @@ def render_inference_video(
 def render_summary_image(
     roi_masks, 
     roi_traces, 
-    video_data,
+    data,
     save_filepath, 
     fps=None, 
     trace_stack_offset_std=5.0,
@@ -485,18 +485,18 @@ def render_summary_image(
     #before falling back to the default
     if fps is None:
         try:
-            if hasattr(video_data, "fr") and video_data.fr:
-                fps = video_data.fr
+            if hasattr(data, "fr") and data.fr:
+                fps = data.fr
             else:
                 fps = 30 #30 as default value
         except AttributeError:
             fps = 30 #30 as default value if its not available the movie object
     
     num_rois = len(roi_masks)
-    n_frames, height, width = video_data.shape
+    n_frames, height, width = data.shape
     
     #Create the Maximum Intensity Projection (MIP)
-    background_img = np.max(video_data, axis=0)
+    background_img = np.max(data, axis=0)
 
     fig, (ax_map, ax_trace) = plt.subplots(
         1, 2, 

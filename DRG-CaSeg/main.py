@@ -49,7 +49,7 @@ def main():
     logger.info(f"Running Experiments with {n_processes} parallel processes")
 
     #Lazy imports to avoid automatic initialization of environment variables
-    from infra.utils import get_config_files, setup_cluster
+    from infra.infra_utils import get_config_files, setup_cluster
     from utils import seed_everything
     from infra.experiment import Experiment
 

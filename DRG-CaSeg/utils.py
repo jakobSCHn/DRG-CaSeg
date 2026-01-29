@@ -16,6 +16,7 @@ def seed_everything(seed: int):
     
     logger.info(f"Global random seed set to {seed}")
 
+
 def save_dict_to_yaml(
     data: dict,
     save_path: Path,
