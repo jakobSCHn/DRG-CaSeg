@@ -31,6 +31,12 @@ analysis:
       ring_size_factor: 2
       min_corr: 0.5
 
+plotter:
+  - id: "summary_image"
+    function: data_utils.plotter.render_summary_image
+    params:
+      fps: 33.33
+
 evaluation:
   - id: "IoU"
     function: analysis_utils.workflow.evaluate_segmentation

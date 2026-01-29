@@ -37,6 +37,7 @@ class Experiment:
         data_cfgs = self.config["dataset"]
         steps_pre = self.config.get("preprocessing", [])
         analysis_methods = self.config["analysis"]
+        visualization = self.config.get("visualization", [])
         evaluation_methods = self.config.get("evaluation", [])
 
         for data_cfg in data_cfgs:
@@ -85,12 +86,19 @@ class Experiment:
                     ana_id=ana["id"],
                 )
 
-                render_inference_video(
-                    roi_masks=results["masks"],
-                    roi_traces=results["traces"],
-                    video_data=data,
-                    save_filepath=save_path / "inference.mp4"
-                )
+                if visualization:
+                    for vis in visualization:
+                        logger.info(f"Plotting results with Results ID: {vis["id"]}")
+                        plotter = configure_callable(
+                            id=vis["id"],
+                            import_path=vis["function"],
+                            roi_masks=vis["masks"],
+                            roi_traces=vis["traces"],
+                            save_filepath=save_path,
+                            data=data,
+                            params=ana.get("params", {})
+                        )
+                        plotter()
 
                 if evaluation_methods and len(gt) > 0:
                     for eva in evaluation_methods:

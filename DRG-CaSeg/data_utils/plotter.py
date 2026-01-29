@@ -185,11 +185,13 @@ def plot_spatial_patterns(
     plt.savefig(filename)
 
 
-def save_colored_contour_plot(master_neuron_mask, 
-                              background_image, 
-                              save_filepath, 
-                              dpi=300, 
-                              cmap_name='gist_rainbow'):
+def save_colored_contour_plot(
+    master_neuron_mask, 
+    background_image, 
+    save_filepath, 
+    dpi=300, 
+    cmap_name='gist_rainbow',
+    ):
     """
     Generates a contour plot of all ROIs on a background image,
     where each independent ROI (neuron) has a unique color, 
@@ -367,6 +369,7 @@ def save_contour_and_trace_plot(
         
     plt.close(fig)
 
+
 def render_inference_video(
     roi_masks, 
     roi_traces, 
@@ -428,7 +431,6 @@ def render_inference_video(
         vmin=vmin, 
         vmax=vmax
     )
-
     
     fig.canvas.draw()
     mat_img = np.array(fig.canvas.renderer.buffer_rgba())
@@ -463,3 +465,101 @@ def render_inference_video(
     out.release()
     plt.close(fig)
     logger.info("Video saved successfully.")
+
+
+def render_summary_image(
+    roi_masks, 
+    roi_traces, 
+    video_data,
+    save_filepath, 
+    fps=None, 
+    trace_stack_offset_std=5.0,
+    cmap_name="gist_rainbow",
+    dpi=300
+    ):
+    """
+    Renders a static summary plot using a Maximum Intensity Projection (MIP)
+    and stacked activity traces with temporal grid lines.
+    """
+    #Try fetching fps from the video object if user hasn't given input
+    #before falling back to the default
+    if fps is None:
+        try:
+            if hasattr(video_data, "fr") and video_data.fr:
+                fps = video_data.fr
+            else:
+                fps = 30 #30 as default value
+        except AttributeError:
+            fps = 30 #30 as default value if its not available the movie object
+    
+    num_rois = len(roi_masks)
+    n_frames, height, width = video_data.shape
+    
+    #Create the Maximum Intensity Projection (MIP)
+    background_img = np.max(video_data, axis=0)
+
+    fig, (ax_map, ax_trace) = plt.subplots(
+        1, 2, 
+        figsize=(18, 8), 
+        gridspec_kw={"width_ratios": [1, 1.5]},
+        dpi=dpi
+    )
+    fig.suptitle("Spatial Layout & Activity Summary", fontsize=20, fontweight="bold", y=0.95)
+
+    #Handle Colors
+    try:
+        colors = plt.colormaps[cmap_name].resampled(num_rois)
+    except AttributeError:
+        colors = plt.cm.get_cmap(cmap_name, num_rois)
+
+    #LEFT PLOT: Spatial Map (MIP)
+    #Normalize background for better contrast (clip top/bottom 1% of outliers)
+    vmin, vmax = np.percentile(background_img, 1), np.percentile(background_img, 99)
+    
+    ax_map.imshow(background_img, cmap="gray", vmin=vmin, vmax=vmax)
+    ax_map.set_title("Spatial Neuron Identification")
+    ax_map.axis("off")
+
+    #Plot contours
+    for i in range(num_rois):
+        contours = find_contours(roi_masks[i], 0.5)
+        for contour in contours:
+            ax_map.plot(contour[:, 1], contour[:, 0], linewidth=1.5, color=colors(i))
+            
+            #Add ROI Label
+            cy, cx = np.mean(contour[:, 0]), np.mean(contour[:, 1])
+            ax_map.text(cx, cy, str(i), color="white", fontsize=8, ha="center", va="center", fontweight="bold")
+
+    #RIGHT PLOT: Stacked Traces
+    time_seconds = np.arange(n_frames) / fps
+    
+    ax_trace.set_title("Activity Traces (Z-scored)")
+    
+    for i in range(num_rois):
+        trace_z = zscore(roi_traces[i])
+        offset = i * trace_stack_offset_std
+        
+        #Plot the trace
+        ax_trace.plot(time_seconds, trace_z + offset, color=colors(i), linewidth=0.8)
+        
+        #Add a specific zero-level grid line for this ROI
+        ax_trace.axhline(y=offset, color="gray", linestyle=":", linewidth=0.5, alpha=0.5)
+
+    ax_trace.set_xlabel("Time (seconds)")
+    ax_trace.set_xlim(0, time_seconds[-1])
+    
+    #Remove standard Y ticks
+    ax_trace.set_yticks([])
+    ax_trace.set_ylabel("ROIs (Stacked)") 
+    #Invert Y-axis so ROI 0 is at the top
+    ax_trace.invert_yaxis()
+    
+    #Remove plot box for scientific style
+    ax_trace.spines["top"].set_visible(False)
+    ax_trace.spines["right"].set_visible(False)
+    ax_trace.spines["left"].set_visible(False)
+
+    plt.tight_layout()
+    fig.savefig(save_filepath, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+    logger.info("Summary Image saved successfully.")
