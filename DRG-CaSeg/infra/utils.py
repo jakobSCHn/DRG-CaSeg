@@ -126,6 +126,7 @@ def get_config_files(
 
 
 def setup_experiment_folder(
+    experiment_name: str,
     run_id: str,
     config_path: str,
     data_id: str,
@@ -137,7 +138,7 @@ def setup_experiment_folder(
         output_dir_name = f"{p.stem}_{run_id}_{data_id}_{ana_id}"
     else:
         output_dir_name = f"{p.stem}_{run_id}_{data_id}"
-    output_dir = Path("results") / output_dir_name
+    output_dir = Path("results") / f"{experiment_name}_{run_id}" / output_dir_name
 
     output_dir.mkdir(parents=True)
     shutil.copy(p, output_dir / "config.yaml")

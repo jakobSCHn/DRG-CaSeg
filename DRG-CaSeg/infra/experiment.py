@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 @attrs.define
 class Experiment:
+    name: str
     config: dict
     config_path: str
     run_id: str = attrs.field(factory=lambda: datetime.now().strftime("%Y%m%d_%H%M%S"))
@@ -24,14 +25,14 @@ class Experiment:
         if cfg is None:
             raise ValueError(f"The config file at {path} is empty.")
         
-        return cls(config=cfg, config_path=path)
+        return cls(name=cfg["experiment_name"], config=cfg, config_path=path)
 
 
     def run(
             self,
             runtime_context: dict = None,
         ):
-        logger.info(f"Running: {self.config['experiment_name']}")
+        logger.info(f"Running: {self.config["experiment_name"]}")
         
         #Load experiment configurations
         data_cfgs = self.config["dataset"]
