@@ -37,7 +37,7 @@ def run_ica(
         maxrounds=maxrounds,
     )
 
-    masks, traces = extract_rois_and_traces(
+    masks, traces, labels = extract_rois_and_traces(
         spatial_filters=ica_filters,
         temporal_signals=ica_sig,
         min_size=minsize,
@@ -49,6 +49,7 @@ def run_ica(
     return {
         "masks": masks,
         "traces": traces,
+        "labels": labels,
     }
 
 def evaluate_segmentation(

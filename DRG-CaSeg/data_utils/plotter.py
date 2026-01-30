@@ -489,6 +489,7 @@ def render_inference_video(
 def render_summary_image(
     roi_masks, 
     roi_traces, 
+    roi_labels,
     data,
     save_filepath, 
     fps=None, 
@@ -498,23 +499,16 @@ def render_summary_image(
     ):
     """
     Renders a static summary plot using a Maximum Intensity Projection (MIP)
-    and stacked activity traces with temporal grid lines.
+    and stacked activity traces with temporal grid lines and matching labels.
     """
-    #Try fetching fps from the video object if user hasn't given input
-    #before falling back to the default
     if fps is None:
         try:
-            if hasattr(data, "fr") and data.fr:
-                fps = data.fr
-            else:
-                fps = 30 #30 as default value
+            fps = data.fr if hasattr(data, "fr") and data.fr else 30
         except AttributeError:
-            fps = 30 #30 as default value if its not available the movie object
+            fps = 30
     
     num_rois = len(roi_masks)
     n_frames, height, width = data.shape
-    
-    #Create the Maximum Intensity Projection (MIP)
     background_img = np.max(data, axis=0)
 
     fig, (ax_map, ax_trace) = plt.subplots(
@@ -525,58 +519,59 @@ def render_summary_image(
     )
     fig.suptitle("Spatial Layout & Activity Summary", fontsize=20, fontweight="bold", y=0.95)
 
-    #Handle Colors
     try:
         colors = plt.colormaps[cmap_name].resampled(num_rois)
     except AttributeError:
         colors = plt.cm.get_cmap(cmap_name, num_rois)
 
-    #LEFT PLOT: Spatial Map (MIP)
-    #Normalize background for better contrast (clip top/bottom 1% of outliers)
+    # LEFT PLOT: Spatial Map
     vmin, vmax = np.percentile(background_img, 1), np.percentile(background_img, 99)
-    
     ax_map.imshow(background_img, cmap="gray", vmin=vmin, vmax=vmax)
     ax_map.set_title("Spatial Neuron Identification")
     ax_map.axis("off")
 
-    #Plot contours
     for i in range(num_rois):
         contours = find_contours(roi_masks[i], 0.5)
         for contour in contours:
             ax_map.plot(contour[:, 1], contour[:, 0], linewidth=1.5, color=colors(i))
             
-            #Add ROI Label
             cy, cx = np.mean(contour[:, 0]), np.mean(contour[:, 1])
-            ax_map.text(cx, cy, str(i), color="white", fontsize=8, ha="center", va="center", fontweight="bold")
+            ax_map.text(cx, cy, roi_labels[i], color="white", fontsize=8, 
+                        ha="center", va="center", fontweight="bold")
 
-    #RIGHT PLOT: Stacked Traces
+    # RIGHT PLOT: Stacked Traces
     time_seconds = np.arange(n_frames) / fps
-    
     ax_trace.set_title("Activity Traces (Z-scored)")
     
     for i in range(num_rois):
         trace_z = zscore(roi_traces[i])
         offset = i * trace_stack_offset_std
         
-        #Plot the trace
+        # Plot the trace
         ax_trace.plot(time_seconds, trace_z + offset, color=colors(i), linewidth=0.8)
         
-        #Add a specific zero-level grid line for this ROI
+        # Label the trace with matching ROI ID
+        ax_trace.text(
+            -0.01 * time_seconds[-1], 
+            offset, 
+            roi_labels[i], 
+            color=colors(i), 
+            fontweight="bold", 
+            ha="right", 
+            va="center", 
+            fontsize=9
+        )
+        
         ax_trace.axhline(y=offset, color="gray", linestyle=":", linewidth=0.5, alpha=0.5)
 
     ax_trace.set_xlabel("Time (seconds)")
-    ax_trace.set_xlim(0, time_seconds[-1])
-    
-    #Remove standard Y ticks
+    ax_trace.set_xlim(-0.05 * time_seconds[-1], time_seconds[-1])
     ax_trace.set_yticks([])
     ax_trace.set_ylabel("ROIs (Stacked)") 
-    #Invert Y-axis so ROI 0 is at the top
     ax_trace.invert_yaxis()
     
-    #Remove plot box for scientific style
-    ax_trace.spines["top"].set_visible(False)
-    ax_trace.spines["right"].set_visible(False)
-    ax_trace.spines["left"].set_visible(False)
+    for spine in ["top", "right", "left"]:
+        ax_trace.spines[spine].set_visible(False)
 
     plt.tight_layout()
     fig.savefig(save_filepath / "summary_image.png", dpi=dpi, bbox_inches="tight")

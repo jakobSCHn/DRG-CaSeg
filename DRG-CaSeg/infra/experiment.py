@@ -97,6 +97,7 @@ class Experiment:
                                 **vis.get("params", {}),
                                 "roi_masks": results["masks"],
                                 "roi_traces": results["traces"],
+                                "roi_labels": results["labels"],
                                 "save_filepath": save_path,
                                 "data": data,
                             },

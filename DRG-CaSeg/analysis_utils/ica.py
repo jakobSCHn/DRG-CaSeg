@@ -110,17 +110,30 @@ def ica_mukamel(
         # Pure spatial ICA
         sig_use = mixedfilters.T
     else:
-        # Spatial-temporal ICA
-        sig_use = np.hstack([(1 - mu) * mixedfilters.T, mu * mixedsig])
-        # Normalization
-        sig_use = sig_use / np.sqrt(1 - 2 * mu + 2 * mu**2)
+        # WHITENING/NORMALIZATION IS MANDATORY HERE
+        # Center and scale to unit variance so mu actually works
+        f_part = mixedfilters.T - np.mean(mixedfilters.T, axis=1, keepdims=True)
+        f_part /= (np.std(f_part) + 1e-10)
+        
+        s_part = mixedsig - np.mean(mixedsig, axis=1, keepdims=True)
+        s_part /= (np.std(s_part) + 1e-10)
+        
+        # Now mu acts on standardized data
+        sig_use = np.hstack([(1 - mu) * f_part, mu * s_part])
+        
+        # Final re-standardization of the joint matrix
+        sig_use /= np.sqrt((1 - mu)**2 + mu**2)
+    
+    # Final whitening: Ensure sig_use has identity covariance
+    # This is crucial for symmetric orthogonalization to work
+    sig_use = sig_use - np.mean(sig_use, axis=1, keepdims=True)
+    sig_use = sig_use / np.std(sig_use)
 
     # 5. Perform ICA
     ica_A, numiter = _fpica_standardica(sig_use, nIC, w_init, termtol, maxrounds)
 
     # 6. Post-processing and sorting
-    ica_W = ica_A.T
-    ica_sig = ica_W @ mixedsig
+    ica_sig = ica_A.T @ mixedsig
     
     # Calculate ica_filters
     # (mixedfilters @ diag(CovEvals**(-1/2)) @ ica_A).T
@@ -158,6 +171,8 @@ def _fpica_standardica(x, nIC, w_init, termtol, maxrounds):
         numSamples = x.shape[1]
         
         b = w_init
+        #initial orthogonalization of the random guess
+        b = b @ np.real(inv(sqrtm(b.T @ b)))
         bOld = np.zeros_like(b)
         
         iternum = 0
@@ -172,12 +187,14 @@ def _fpica_standardica(x, nIC, w_init, termtol, maxrounds):
             
             # B = B * real(inv(B' * B)^(1/2));
             # This is B = B @ (B.T @ B)^(-1/2)
-            b = b @ np.real(inv(sqrtm(b.T @ b)))
+            cov_b = b.T @ b
+            eps = 1e-10 * np.eye(cov_b.shape[0]) #add a small epsilon for numerical stability
+            b = b @ np.real(inv(sqrtm(cov_b + eps)))
             
             # Test for termination condition.
             minAbsCos = np.min(np.abs(np.diag(b.T @ bOld)))
             
-            bOld = b
+            bOld = b.copy()
         
         if iternum < maxrounds:
             logger.info(f"Convergence in {iternum} rounds.")
@@ -192,9 +209,9 @@ def extract_rois_and_traces(
     spatial_filters, 
     temporal_signals, 
     kurtosis_thresh=5.0, 
-    z_thresh=3.0, 
-    min_size=10, 
-    max_size=500
+    z_thresh=2.5, 
+    min_size=50, 
+    max_size=25000,
     ):
     """
     Selects neuron-like ICA components and extracts a list of individual 
@@ -221,9 +238,11 @@ def extract_rois_and_traces(
     
     final_roi_masks = []
     final_roi_traces = []
+    roi_labels = []
 
     logger.info(f"Processing {n_components} spatial filters...")
 
+    counter = 0
     for i in range(n_components):
         component_img = spatial_filters[i]
         component_trace = temporal_signals[i]
@@ -264,12 +283,17 @@ def extract_rois_and_traces(
             
             # Re-label the component_mask to separate any non-contiguous blobs
             labeled_rois, num_rois = label(component_mask)
+            use_suffix = num_rois > 1
             
             # Add each individual blob as its own ROI
+            counter += 1
             for j in range(1, num_rois + 1):
                 roi_mask = (labeled_rois == j)
                 final_roi_masks.append(roi_mask)
                 final_roi_traces.append(-component_trace) # All blobs from this component get the same trace
+
+                suffix = chr(96 + j) if use_suffix else ""
+                roi_labels.append(f"{counter}{suffix}")
                 
         else:
             logger.info(f"  [Component {i:2d}]: REJECTED (Kurtosis = {k:.2f})")
@@ -280,4 +304,4 @@ def extract_rois_and_traces(
     final_roi_masks_array = np.array(final_roi_masks)
     final_roi_traces_array = np.array(final_roi_traces)
     
-    return final_roi_masks_array, final_roi_traces_array
+    return final_roi_masks_array, final_roi_traces_array, roi_labels
