@@ -54,7 +54,7 @@ def run_ica(
 
 def evaluate_segmentation(
     pred: np.ndarray, 
-    gt: np.ndarray, 
+    gt: dict, 
     iou_threshold: float = 0.5
     ) -> dict:
     """
@@ -76,10 +76,12 @@ def evaluate_segmentation(
             "fn": int
         }
     """
-    if gt.shape[0] == 0 or pred.shape[0] == 0:
+
+    gt_spatial = gt["spatial"]
+    if gt_spatial.shape[0] == 0 or pred.shape[0] == 0:
         return {"precision": 0.0, "recall": 0.0, "f1_score": 0.0, "mean_iou": 0.0}
 
-    iou_matrix = compute_iou_matrix(gt, pred)
+    iou_matrix = compute_iou_matrix(gt_spatial, pred)
     
     #Hungarian Algorithm to find best matches
     row_ind, col_ind = linear_sum_assignment(iou_matrix, maximize=True)
@@ -95,7 +97,7 @@ def evaluate_segmentation(
     false_positives = pred.shape[0] - true_positives
     
     #False Negatives: GT masks that weren't matched to any Pred or had low IoU
-    false_negatives = gt.shape[0] - true_positives
+    false_negatives = gt_spatial.shape[0] - true_positives
     
     #Calculate Metrics
     precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0.0
