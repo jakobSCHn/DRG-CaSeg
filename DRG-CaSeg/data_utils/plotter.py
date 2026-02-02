@@ -15,6 +15,7 @@ from skimage.measure import find_contours
 from scipy.stats import zscore
 from pathlib import Path
 from contextlib import contextmanager
+from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,7 @@ def plot_frame(
         frame_id=frame_id)
 
 
+@suppress_gui()
 def plot_image(
     image: np.ndarray,
     save_loc: str | Path,
@@ -493,8 +495,8 @@ def render_summary_image(
     data,
     save_filepath, 
     fps=None, 
-    trace_stack_offset_std=5.0,
-    cmap_name="gist_rainbow",
+    trace_stack_offset_std=6.0,
+    cmap="viridis",
     dpi=300
     ):
     """
@@ -502,10 +504,7 @@ def render_summary_image(
     and stacked activity traces with temporal grid lines and matching labels.
     """
     if fps is None:
-        try:
-            fps = data.fr if hasattr(data, "fr") and data.fr else 30
-        except AttributeError:
-            fps = 30
+        fps = getattr(data, "fr", 30) or 30
     
     num_rois = len(roi_masks)
     n_frames, height, width = data.shape
@@ -513,31 +512,38 @@ def render_summary_image(
 
     fig, (ax_map, ax_trace) = plt.subplots(
         1, 2, 
-        figsize=(18, 8), 
-        gridspec_kw={"width_ratios": [1, 1.5]},
+        figsize=(16, 9), 
+        gridspec_kw={"width_ratios": [1, 1.2]},
         dpi=dpi
     )
     fig.suptitle("Spatial Layout & Activity Summary", fontsize=20, fontweight="bold", y=0.95)
 
     try:
-        colors = plt.colormaps[cmap_name].resampled(num_rois)
+        colors = plt.get_cmap(cmap)(np.linspace(0, 1, num_rois))
     except AttributeError:
-        colors = plt.cm.get_cmap(cmap_name, num_rois)
+        raise ValueError(f"Colormap {cmap} has not enough colors to plot all ROIs.")
 
     # LEFT PLOT: Spatial Map
-    vmin, vmax = np.percentile(background_img, 1), np.percentile(background_img, 99)
-    ax_map.imshow(background_img, cmap="gray", vmin=vmin, vmax=vmax)
-    ax_map.set_title("Spatial Neuron Identification")
-    ax_map.axis("off")
+    vmin, vmax =  np.percentile(background_img, [1, 99])
+    ax_map.imshow(background_img, cmap="gray", vmin=vmin, vmax=vmax, interpolation="bilinear")
 
     for i in range(num_rois):
         contours = find_contours(roi_masks[i], 0.5)
         for contour in contours:
-            ax_map.plot(contour[:, 1], contour[:, 0], linewidth=1.5, color=colors(i))
+            ax_map.plot(contour[:, 1], contour[:, 0], linewidth=1.2, color=colors[i])
             
             cy, cx = np.mean(contour[:, 0]), np.mean(contour[:, 1])
-            ax_map.text(cx, cy, roi_labels[i], color="white", fontsize=8, 
+            ax_map.text(cx, cy, roi_labels[i], color="#00FFFF", fontsize=8, 
                         ha="center", va="center", fontweight="bold")
+            
+    bar_length_um = 100
+    md = data.meta_data[0]
+    bar_length_px = bar_length_um / md["scale"]
+    scalebar = AnchoredSizeBar(ax_map.transData, bar_length_px, f"{bar_length_um} \u03bcm", 
+                                "lower right", pad=0.5, color="white", frameon=False, size_vertical=2)
+    ax_map.add_artist(scalebar)
+    ax_map.set_title("Neuron ROIs", fontsize=14)
+    ax_map.axis("off")
 
     # RIGHT PLOT: Stacked Traces
     time_seconds = np.arange(n_frames) / fps
@@ -548,14 +554,14 @@ def render_summary_image(
         offset = i * trace_stack_offset_std
         
         # Plot the trace
-        ax_trace.plot(time_seconds, trace_z + offset, color=colors(i), linewidth=0.8)
+        ax_trace.plot(time_seconds, trace_z + offset, color=colors[i], linewidth=0.8)
         
         # Label the trace with matching ROI ID
         ax_trace.text(
             -0.01 * time_seconds[-1], 
             offset, 
             roi_labels[i], 
-            color=colors(i), 
+            color=colors[i], 
             fontweight="bold", 
             ha="right", 
             va="center", 
@@ -564,10 +570,12 @@ def render_summary_image(
         
         ax_trace.axhline(y=offset, color="gray", linestyle=":", linewidth=0.5, alpha=0.5)
 
-    ax_trace.set_xlabel("Time (seconds)")
-    ax_trace.set_xlim(-0.05 * time_seconds[-1], time_seconds[-1])
+    ax_trace.plot([time_seconds[-1] * 1.02, time_seconds[-1] * 1.02], [0, 2], color="black", lw=1.5)
+    ax_trace.text(time_seconds[-1] * 1.03, 1, "2 SD", rotation=270, va="center")
+
+    ax_trace.set_xlabel("Time (s)", fontsize=12)
+    ax_trace.set_xlim(-0.1 * time_seconds[-1], time_seconds[-1])
     ax_trace.set_yticks([])
-    ax_trace.set_ylabel("ROIs (Stacked)") 
     ax_trace.invert_yaxis()
     
     for spine in ["top", "right", "left"]:

@@ -15,8 +15,8 @@ def run_ica(
     n_pcs: int | tuple[int, int] = 20,
     mu=0.5,
     maxrounds=200,
-    minsize=15,
-    maxsize=200,
+    minsize=25,
+    maxsize=25000,
     ):
     """
     Orchestrates PCA dimensionality reduction followed by ICA source extraction.

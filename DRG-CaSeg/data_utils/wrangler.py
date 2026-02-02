@@ -204,20 +204,27 @@ def load_drg_model_video(
 
     #Render the final video
     logger.info("Rendering video frames...")
-    video_data = model.render_video()
+    
+    md_dict = {
+        "seed": seed,
+        "fps": model.fps,
+        "scale": model.um_per_pixel,
+        "width": model.width_px,
+        "height": model.height_px,
+    }
+    mov = cm.movie(model.render_video(), meta_data=md_dict)
 
     #Return standardized dataset structure
     dataset_id = params.get("id", f"synthetic_{seed}")
     
     return {
         "id": dataset_id,
-        "data": video_data,
-        "gt": model.footprints,
+        "data": mov,
+        "gt": {
+            "spatial": model.footprints,
+            "temporal": model.activities,
+        },
         "meta": {
-            "fps": model.fps,
-            "seed": seed,
-            "ground_truth_footprints": model.footprints, 
-            "ground_truth_traces": model.activities,
             "cell_metadata": model.cell_metadata
         }
     }

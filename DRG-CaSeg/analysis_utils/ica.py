@@ -1,11 +1,15 @@
 import numpy as np
 import logging
 
+import skimage.measure as ms
+
 from scipy.stats import skew, kurtosis
 from scipy.linalg import inv, sqrtm
 
 from scipy.ndimage import label, binary_opening, binary_closing
 from scipy.ndimage import sum as ndi_sum
+
+from data_utils.plotter import plot_image
 
 logger = logging.getLogger(__name__)
 
@@ -209,8 +213,8 @@ def extract_rois_and_traces(
     spatial_filters, 
     temporal_signals, 
     kurtosis_thresh=5.0, 
-    z_thresh=2.5, 
-    min_size=50, 
+    z_thresh=2, 
+    min_size=25, 
     max_size=25000,
     ):
     """
@@ -247,6 +251,8 @@ def extract_rois_and_traces(
         component_img = spatial_filters[i]
         component_trace = temporal_signals[i]
         
+        plot_image(image=component_img, save_loc="/home/jaschneider/projects/DRG-CaSeg/temp", title=f"component_{i}")
+
         k = kurtosis(component_img.ravel()) 
         
         if k > kurtosis_thresh:
@@ -260,7 +266,7 @@ def extract_rois_and_traces(
             
             structure = np.ones((3, 3))
             cleaned_mask = binary_opening(binary_mask, structure=structure)
-            cleaned_mask = binary_closing(cleaned_mask, structure=structure)
+            cleaned_mask = binary_closing(cleaned_mask, structure=structure).astype(int)
             
             labeled_array, num_features = label(cleaned_mask)
             
@@ -269,7 +275,6 @@ def extract_rois_and_traces(
 
             blob_labels = np.arange(1, num_features + 1)
             blob_sizes = ndi_sum(cleaned_mask, labeled_array, index=blob_labels)
-            
             good_blob_labels = blob_labels[(blob_sizes >= min_size) & 
                                            (blob_sizes <= max_size)]
             
