@@ -134,7 +134,6 @@ def setup_experiment_folder(
     ):
 
     p = Path(config_path)
-    path = Path(__file__)
     project_root = Path(__file__).resolve().parents[3]
     results_base_dir = project_root / "results"
 

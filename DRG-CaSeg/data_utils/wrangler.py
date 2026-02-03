@@ -223,6 +223,7 @@ def load_drg_model_video(
         "gt": {
             "spatial": model.footprints,
             "temporal": model.activities,
+            "labels": model.labels,
         },
         "meta": {
             "cell_metadata": model.cell_metadata

@@ -250,8 +250,6 @@ def extract_rois_and_traces(
     for i in range(n_components):
         component_img = spatial_filters[i]
         component_trace = temporal_signals[i]
-        
-        plot_image(image=component_img, save_loc="/home/jaschneider/projects/DRG-CaSeg/temp", title=f"component_{i}")
 
         k = kurtosis(component_img.ravel()) 
         
@@ -264,7 +262,7 @@ def extract_rois_and_traces(
             std_val = np.std(component_img)
             binary_mask = np.abs(component_img - mean_val) > (z_thresh * std_val)
             
-            structure = np.ones((3, 3))
+            structure = np.ones((5, 5))
             cleaned_mask = binary_opening(binary_mask, structure=structure)
             cleaned_mask = binary_closing(cleaned_mask, structure=structure).astype(int)
             

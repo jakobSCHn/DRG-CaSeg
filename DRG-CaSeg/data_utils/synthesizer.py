@@ -69,8 +69,8 @@ class DRGtissueModel:
     um_per_pixel: float = attrs.field(default=7.206)
     
     # --- Spatial Component Parameters ---
-    num_small_neurons: int = attrs.field(default=20)
-    num_large_neurons: int = attrs.field(default=15)
+    num_small_neurons: int = attrs.field(default=8)
+    num_large_neurons: int = attrs.field(default=7)
     small_neuron_size_um: tuple[float, float] = attrs.field(default=(20, 50))
     large_neuron_size_um: tuple[float, float] = attrs.field(default=(50, 200))
     glia_thickness_um: tuple[float, float] = attrs.field(default=(5, 15))
@@ -105,6 +105,7 @@ class DRGtissueModel:
     # Storage for the rendering matrices
     footprints = attrs.field(init=False, default=None)
     activities = attrs.field(init=False, default=None)
+    labels = attrs.field(init=False, default=None)
     background = attrs.field(init=False, default=None)
     
     # Storage for the abstract definition of cells (allows moving them later)
@@ -189,7 +190,7 @@ class DRGtissueModel:
         """
         
         if not self.cell_metadata:
-            self._generate_initial_cell_definitions()
+            self._generate_cell_definitions()
 
         spatial_maps = []
         traces = []
@@ -221,10 +222,11 @@ class DRGtissueModel:
 
         self.footprints = np.stack(spatial_maps, axis=0)
         self.activities = np.stack(traces, axis=0)
+        self.labels = np.arange(self.footprints.shape[0])
         
         return self.footprints, self.activities
 
-    def _generate_initial_cell_definitions(self):
+    def _generate_cell_definitions(self):
         """Generates random parameters for all cells once."""
         self.cell_metadata = []
         

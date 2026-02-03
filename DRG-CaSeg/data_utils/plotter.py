@@ -9,6 +9,7 @@ import logging
 import matplotlib
 import matplotlib.pyplot as plt
 import cv2
+import caiman as cm
 
 from scipy.ndimage import label
 from skimage.measure import find_contours
@@ -24,6 +25,7 @@ def suppress_gui():
     """
     Temporarily switches the matplotlib backend to 'Agg' to prevent 
     interactive windows from popping up during figure creation.
+    Caiman automatically activates interactive mode when imported.
     """
     #get current backend to restore it later
     original_backend = matplotlib.get_backend()
@@ -33,22 +35,6 @@ def suppress_gui():
     finally:
         #restore the original backend (e.g., 'Qt5Agg')
         matplotlib.use(original_backend, force=True)
-
-
-
-def plot_frame(
-    vid: np.ndarray,
-    frame_id: int,
-    save_loc: str | Path,
-    title: str = "Video Frame"
-    ):
-
-    img = vid[frame_id]    
-    return plot_image(
-        frame=img,
-        save_loc=save_loc,
-        title=title,
-        frame_id=frame_id)
 
 
 @suppress_gui()
@@ -205,12 +191,13 @@ def plot_spatial_patterns(
     plt.savefig(filename)
 
 
-def save_colored_contour_plot(
-    master_neuron_mask, 
-    background_image, 
+def plot_contours(
+    masks,
+    labels,
+    background_img,
     save_filepath, 
     dpi=300, 
-    cmap_name='gist_rainbow',
+    cmap="viridis",
     ):
     """
     Generates a contour plot of all ROIs on a background image,
@@ -227,67 +214,82 @@ def save_colored_contour_plot(
                          'gist_rainbow' or 'tab20' are good choices.
     """
     
-    # 1. Find and label all independent blobs
-    # labeled_array will have 0 for bg, 1 for blob 1, 2 for blob 2, etc.
-    labeled_array, num_features = label(master_neuron_mask)
-    
-    if num_features == 0:
-        print("No neurons found in the mask. No image will be saved.")
-        return
+    num_rois = len(masks)
 
-    # 2. Set up the plot
-    # We create a figure and axis object to have full control
     fig, ax = plt.subplots(figsize=(10, 10))
     
-    # 3. Get a colormap to generate unique colors
-    # Get `num_features` distinct colors from the specified colormap
     try:
-        colors = plt.colormaps[cmap_name].resampled(num_features)
-    except: # Fallback for older matplotlib versions
-        colors = plt.cm.get_cmap(cmap_name, num_features)
+        colors = plt.get_cmap(cmap)(np.linspace(0, 1, num_rois))
+    except AttributeError:
+        raise ValueError(f"Colormap {cmap} has not enough colors to plot all ROIs.")
     
-    # 4. Plot the background image
-    ax.imshow(background_image, cmap='gray')
-    
-    # 5. Loop through each blob, find its contour, and plot it
-    logger.info(f"Plotting {num_features} unique neuron contours...")
-    for i in range(1, num_features + 1): # Loop from 1 to num_features
-        # Create a mask for *only* this blob
-        blob_mask = (labeled_array == i)
+    vmin, vmax =  np.percentile(background_img, [1, 99])
+    ax.imshow(background_img, cmap="gray", vmin=vmin, vmax=vmax, interpolation="bilinear")
+
+    h, w = background_img.shape[:2]
+    for i in range(num_rois):
+        mask = masks[i]
+        contours = find_contours(mask, 0.5)
         
-        # Find contours for this single blob
-        # find_contours returns a list of contour arrays
-        contours = find_contours(blob_mask, 0.5)
-        
-        # Get the unique color for this blob (index i-1)
-        blob_color = colors(i - 1)
-        
-        # Plot all contours found for this blob (usually just one)
+        best_point = None
+        min_dist = float("inf")
+
         for contour in contours:
-            # contour[:, 1] is x (col), contour[:, 0] is y (row)
-            ax.plot(contour[:, 1], contour[:, 0], linewidth=1.5, color=blob_color)
+            ax.plot(contour[:, 1], contour[:, 0], linewidth=1.2, color=colors[i])
+            
+            # Find the top-left-most point on the contour line (minimizing x + y)
+            distances = contour[:, 0] + contour[:, 1]
+            idx = np.argmin(distances)
+            
+            if distances[idx] < min_dist:
+                min_dist = distances[idx]
+                best_point = contour[idx]
+
+        if best_point is not None:
+            py, px = best_point
+            
+            # --- Boundary Safety & Offset Logic ---
+            va = "bottom"
+            ha = "right"
+            offset_x = -2 
+            offset_y = -2
+
+            # Logic to "flip" the label inside if it's too close to the edge
+            if py < 20: 
+                va = "top"
+                offset_y = 2
+            
+            if px < 20:
+                ha = "left"
+                offset_x = 2
+                
+            # Clamp coordinates to keep them inside the frame
+            final_x = np.clip(px + offset_x, 5, w - 5)
+            final_y = np.clip(py + offset_y, 5, h - 5)
+
+            # Use current_color for the text to match the contour
+            ax.text(
+                final_x, final_y, str(labels[i]), 
+                color=colors[i], 
+                fontsize=8, 
+                fontweight="bold",
+                va=va, 
+                ha=ha,
+                # The black bbox is crucial now to make the colored text readable
+                bbox=dict(facecolor="black", alpha=0.7, pad=0.1, edgecolor="none")
+            )
     
-    # 6. Finalize and save
-    ax.set_title(f"Unique ROI Contours ({num_features} found)")
-    ax.axis('off')
+    #finalize and save
+    ax.set_title(f"ROI Contours")
+    ax.axis("off")
     
-    # Adjust layout to prevent title/labels from being cut off
-    fig.tight_layout()
-    
-    # 7. Save the figure
-    try:
-        # bbox_inches='tight' crops the saved image to the plot contents
-        fig.savefig(save_filepath, dpi=dpi, bbox_inches='tight', facecolor='w')
-        logger.info(f"Successfully saved contour plot to: {save_filepath}")
-    except Exception as e:
-        logger.error(f"Error saving figure: {e}")
-        
-    # 8. Clean up: Close the figure to free up memory
-    # This is critical if you call this function in a loop!
+    plt.tight_layout()
+    fig.savefig(save_filepath, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
+    logger.info("Contour Image saved successfully.")
 
 
-def save_contour_and_trace_plot(
+def plot_contour_and_trace(
     roi_masks, 
     roi_traces, 
     background_image, 
@@ -390,6 +392,126 @@ def save_contour_and_trace_plot(
     plt.close(fig)
 
 
+@suppress_gui()
+def plot_summary_image(
+    results,
+    data,
+    save_filepath, 
+    fps=None, 
+    trace_stack_offset_std=6.0,
+    cmap="viridis",
+    dpi=300
+    ):
+    """
+    Renders a static summary plot using a Maximum Intensity Projection (MIP)
+    and stacked activity traces with temporal grid lines and matching labels.
+    """
+    if fps is None:
+        fps = getattr(data, "fr", 30) or 30
+    
+    roi_masks = results["masks"] 
+    roi_traces = results["traces"] 
+    roi_labels = results["labels"]
+
+    num_rois = len(roi_masks)
+    n_frames, height, width = data.shape
+    background_img = np.max(data, axis=0)
+
+    fig, (ax_map, ax_trace) = plt.subplots(
+        1, 2, 
+        figsize=(16, 9), 
+        gridspec_kw={"width_ratios": [1, 1.2]},
+        dpi=dpi
+    )
+    fig.suptitle("Spatial Layout & Activity Summary", fontsize=20, fontweight="bold", y=0.95)
+
+    try:
+        colors = plt.get_cmap(cmap)(np.linspace(0, 1, num_rois))
+    except AttributeError:
+        raise ValueError(f"Colormap {cmap} has not enough colors to plot all ROIs.")
+
+    # LEFT PLOT: Spatial Map
+    vmin, vmax =  np.percentile(background_img, [1, 99])
+    ax_map.imshow(background_img, cmap="gray", vmin=vmin, vmax=vmax, interpolation="bilinear")
+
+    for i in range(num_rois):
+        contours = find_contours(roi_masks[i], 0.5)
+        for contour in contours:
+            ax_map.plot(contour[:, 1], contour[:, 0], linewidth=1.2, color=colors[i])
+            
+            cy, cx = np.mean(contour[:, 0]), np.mean(contour[:, 1])
+            ax_map.text(cx, cy, roi_labels[i], color="#00FFFF", fontsize=8, 
+                        ha="center", va="center", fontweight="bold")
+            
+    bar_length_um = 100
+    md = data.meta_data[0]
+    bar_length_px = bar_length_um / md["scale"]
+    scalebar = AnchoredSizeBar(ax_map.transData, bar_length_px, f"{bar_length_um} \u03bcm", 
+                                "lower right", pad=0.5, color="white", frameon=False, size_vertical=2)
+    ax_map.add_artist(scalebar)
+    ax_map.set_title("Neuron ROIs", fontsize=14)
+    ax_map.axis("off")
+
+    # RIGHT PLOT: Stacked Traces
+    time_seconds = np.arange(n_frames) / fps
+    ax_trace.set_title("Activity Traces (Z-scored)")
+    
+    for i in range(num_rois):
+        trace_z = zscore(roi_traces[i])
+        offset = i * trace_stack_offset_std
+        
+        # Plot the trace
+        ax_trace.plot(time_seconds, trace_z + offset, color=colors[i], linewidth=0.8)
+        
+        # Label the trace with matching ROI ID
+        ax_trace.text(
+            -0.01 * time_seconds[-1], 
+            offset, 
+            roi_labels[i], 
+            color=colors[i], 
+            fontweight="bold", 
+            ha="right", 
+            va="center", 
+            fontsize=9
+        )
+        
+        ax_trace.axhline(y=offset, color="gray", linestyle=":", linewidth=0.5, alpha=0.5)
+
+    ax_trace.plot([time_seconds[-1] * 1.02, time_seconds[-1] * 1.02], [0, 2], color="black", lw=1.5)
+    ax_trace.text(time_seconds[-1] * 1.03, 1, "2 SD", rotation=270, va="center")
+
+    ax_trace.set_xlabel("Time (s)", fontsize=12)
+    ax_trace.set_xlim(-0.1 * time_seconds[-1], time_seconds[-1])
+    ax_trace.set_yticks([])
+    ax_trace.invert_yaxis()
+    
+    for spine in ["top", "right", "left"]:
+        ax_trace.spines[spine].set_visible(False)
+
+    plt.tight_layout()
+    fig.savefig(save_filepath / "summary_image.png", dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+    logger.info("Summary Image saved successfully.")
+
+
+@suppress_gui()
+def plot_gt_masks(
+    data: cm.movie,
+    gt: dict,
+    save_filepath: Path,
+    ):
+    """
+    Wrapper function to plot the ground truth segmentation masks
+    from the Experiment pipeline.
+    """
+    plot_contours(
+        masks=gt["spatial"],
+        labels=gt["labels"],
+        background_img=np.max(data, axis=0),
+        save_filepath=save_filepath / "gt_image.png",
+    )
+
+
 def render_inference_video(
     roi_masks, 
     roi_traces, 
@@ -485,103 +607,3 @@ def render_inference_video(
     out.release()
     plt.close(fig)
     logger.info("Video saved successfully.")
-
-
-@suppress_gui()
-def render_summary_image(
-    roi_masks, 
-    roi_traces, 
-    roi_labels,
-    data,
-    save_filepath, 
-    fps=None, 
-    trace_stack_offset_std=6.0,
-    cmap="viridis",
-    dpi=300
-    ):
-    """
-    Renders a static summary plot using a Maximum Intensity Projection (MIP)
-    and stacked activity traces with temporal grid lines and matching labels.
-    """
-    if fps is None:
-        fps = getattr(data, "fr", 30) or 30
-    
-    num_rois = len(roi_masks)
-    n_frames, height, width = data.shape
-    background_img = np.max(data, axis=0)
-
-    fig, (ax_map, ax_trace) = plt.subplots(
-        1, 2, 
-        figsize=(16, 9), 
-        gridspec_kw={"width_ratios": [1, 1.2]},
-        dpi=dpi
-    )
-    fig.suptitle("Spatial Layout & Activity Summary", fontsize=20, fontweight="bold", y=0.95)
-
-    try:
-        colors = plt.get_cmap(cmap)(np.linspace(0, 1, num_rois))
-    except AttributeError:
-        raise ValueError(f"Colormap {cmap} has not enough colors to plot all ROIs.")
-
-    # LEFT PLOT: Spatial Map
-    vmin, vmax =  np.percentile(background_img, [1, 99])
-    ax_map.imshow(background_img, cmap="gray", vmin=vmin, vmax=vmax, interpolation="bilinear")
-
-    for i in range(num_rois):
-        contours = find_contours(roi_masks[i], 0.5)
-        for contour in contours:
-            ax_map.plot(contour[:, 1], contour[:, 0], linewidth=1.2, color=colors[i])
-            
-            cy, cx = np.mean(contour[:, 0]), np.mean(contour[:, 1])
-            ax_map.text(cx, cy, roi_labels[i], color="#00FFFF", fontsize=8, 
-                        ha="center", va="center", fontweight="bold")
-            
-    bar_length_um = 100
-    md = data.meta_data[0]
-    bar_length_px = bar_length_um / md["scale"]
-    scalebar = AnchoredSizeBar(ax_map.transData, bar_length_px, f"{bar_length_um} \u03bcm", 
-                                "lower right", pad=0.5, color="white", frameon=False, size_vertical=2)
-    ax_map.add_artist(scalebar)
-    ax_map.set_title("Neuron ROIs", fontsize=14)
-    ax_map.axis("off")
-
-    # RIGHT PLOT: Stacked Traces
-    time_seconds = np.arange(n_frames) / fps
-    ax_trace.set_title("Activity Traces (Z-scored)")
-    
-    for i in range(num_rois):
-        trace_z = zscore(roi_traces[i])
-        offset = i * trace_stack_offset_std
-        
-        # Plot the trace
-        ax_trace.plot(time_seconds, trace_z + offset, color=colors[i], linewidth=0.8)
-        
-        # Label the trace with matching ROI ID
-        ax_trace.text(
-            -0.01 * time_seconds[-1], 
-            offset, 
-            roi_labels[i], 
-            color=colors[i], 
-            fontweight="bold", 
-            ha="right", 
-            va="center", 
-            fontsize=9
-        )
-        
-        ax_trace.axhline(y=offset, color="gray", linestyle=":", linewidth=0.5, alpha=0.5)
-
-    ax_trace.plot([time_seconds[-1] * 1.02, time_seconds[-1] * 1.02], [0, 2], color="black", lw=1.5)
-    ax_trace.text(time_seconds[-1] * 1.03, 1, "2 SD", rotation=270, va="center")
-
-    ax_trace.set_xlabel("Time (s)", fontsize=12)
-    ax_trace.set_xlim(-0.1 * time_seconds[-1], time_seconds[-1])
-    ax_trace.set_yticks([])
-    ax_trace.invert_yaxis()
-    
-    for spine in ["top", "right", "left"]:
-        ax_trace.spines[spine].set_visible(False)
-
-    plt.tight_layout()
-    fig.savefig(save_filepath / "summary_image.png", dpi=dpi, bbox_inches="tight")
-    plt.close(fig)
-    logger.info("Summary Image saved successfully.")

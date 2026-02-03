@@ -124,14 +124,16 @@ analysis:
       mu: 0.8
 
 visualization:
+  - id: "ground_truth_plot"
+    function: data_utils.plotter.plot_gt_masks
   - id: "plot_static_output"
-    function: data_utils.plotter.render_summary_image
+    function: data_utils.plotter.plot_summary_image
     
 
 
 evaluation:
   - id: "IoU"
-    function: analysis_utils.workflow.evaluate_segmentation
+    function: analysis_utils.workflow.evaluate_model_performance
     params:
       iou_threshold: 0.5
   

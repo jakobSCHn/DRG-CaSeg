@@ -6,7 +6,7 @@ from scipy.optimize import linear_sum_assignment
 
 from analysis_utils.pca import cellsort_pca
 from analysis_utils.ica import ica_mukamel, extract_rois_and_traces
-from analysis_utils.metrics import compute_iou_matrix
+from analysis_utils.metrics import compute_iou_matrix, calculate_overlap_correlation
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ def run_ica(
     }
 
 def evaluate_segmentation(
-    pred: np.ndarray, 
+    res: np.ndarray, 
     gt: dict, 
     iou_threshold: float = 0.5
     ) -> dict:
@@ -117,3 +117,19 @@ def evaluate_segmentation(
         "fp": int(false_positives),
         "fn": int(false_negatives)
     }
+
+
+def evaluate_model_performance(
+    res,
+    gt,
+    coverage_threshold: float = 0.6,
+    ):
+    metrics = calculate_overlap_correlation(
+        pred_masks=res["masks"],
+        gt_masks=gt["spatial"],
+        pred_traces=res["traces"],
+        gt_traces=gt["temporal"],
+        coverage_threshold=coverage_threshold,
+    )
+
+    return metrics

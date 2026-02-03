@@ -95,11 +95,10 @@ class Experiment:
                             import_path=vis["function"],
                             params={
                                 **vis.get("params", {}),
-                                "roi_masks": results["masks"],
-                                "roi_traces": results["traces"],
-                                "roi_labels": results["labels"],
-                                "save_filepath": save_path,
+                                "results": results,
                                 "data": data,
+                                "gt": gt,
+                                "save_filepath": save_path,
                             },
                             context=runtime_context,
                         )
@@ -114,10 +113,10 @@ class Experiment:
                             params=eva.get("params", {}),
                             context=runtime_context,
                         )
-                        metrics = evaluator(pred=results["masks"], gt=gt)
-                        logger.info(f"Evaluation Results for {data_cfg['id']}:")
-                        logger.info(f"  Precision: {metrics['precision']:.4f}")
-                        logger.info(f"  Mean IoU:  {metrics['mean_iou']:.4f}")
+                        metrics = evaluator(res=results, gt=gt)
+                        logger.info(f"Evaluation Results for {data_cfg["id"]}:")
+                        logger.info(f"  Precision: {metrics["spatial"]["precision"]:.4f}")
+                        logger.info(f"  Mean IoU:  {metrics["temporal"]["mean_correlation"]:.4f}")
 
                         save_dict_to_yaml(metrics, save_path=save_path / "metrics.yaml")
                 else:
