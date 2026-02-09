@@ -212,7 +212,13 @@ def load_drg_model_video(
         "width": model.width_px,
         "height": model.height_px,
     }
-    mov = cm.movie(model.render_video(), meta_data=md_dict)
+    mov = cm.movie(
+        model.render_video(),
+        fr=model.fps,
+        start_time=0,
+        file_name=params["id"],
+        meta_data=md_dict
+    )
 
     #Return standardized dataset structure
     dataset_id = params.get("id", f"synthetic_{seed}")

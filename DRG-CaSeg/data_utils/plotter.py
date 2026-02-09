@@ -8,12 +8,14 @@ import numpy as np
 import logging
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
 import cv2
+import math
 import caiman as cm
 
-from scipy.ndimage import label
 from skimage.measure import find_contours
-from scipy.stats import zscore
+from matplotlib.patches import Patch
+from scipy.stats import zscore, skew
 from pathlib import Path
 from contextlib import contextmanager
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
@@ -393,29 +395,90 @@ def plot_contour_and_trace(
 
 
 @suppress_gui()
+def plot_spatial_filters(
+    spatial_filters,
+    save_filepath,
+    cmap="Greens",
+    dpi=300,
+    title="Spatial Components",
+    subtitle="Component",
+    file_ext="spatial_components.png"
+    ):
+    """
+    Plots a grid of ICA spatial filters in a roughly square layout.
+    
+    Parameters:
+    - ica_filters: (nIC, X, Y) numpy array of spatial filters.
+    - cmap: Colormap to use (default "Greens").
+    - title: Overall figure title.
+    """
+    n_filters = spatial_filters.shape[0]
+    if n_filters == 0:
+        raise ValueError("No filters found to plot.")
+
+    # Calculate rows and columns for a roughly square grid
+    ncols = math.ceil(math.sqrt(n_filters))
+    nrows = math.ceil(n_filters / ncols)
+
+    # Create figure with a size appropriate for scientific reports
+    # Adjusting the figsize based on the grid dimensions
+    fig, axes = plt.subplots(
+        nrows=nrows, 
+        ncols=ncols, 
+        figsize=(ncols * 2.5, nrows * 2.5),
+        constrained_layout=True
+    )
+    fig.suptitle(title, fontsize=16, fontweight="bold")
+
+    # Flatten axes array for easy iteration if it's 2D
+    if n_filters > 1:
+        axes_flat = axes.flatten()
+    else:
+        axes_flat = [axes]
+
+    for i in range(n_filters):
+        ax = axes_flat[i]
+        
+        # Display the filter
+        ax.imshow(spatial_filters[i], cmap=cmap, interpolation="nearest")
+        ax.set_title(f"{subtitle} #{i+1}", fontsize=10)
+        ax.axis("off") # Removes ticks and frame for a cleaner mask-like view
+
+    # Hide any unused subplots in the grid
+    for j in range(i + 1, len(axes_flat)):
+        axes_flat[j].axis("off")
+
+    fig.savefig(save_filepath / file_ext, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+    logger.info("Display of spatial components saved successfully.")
+
+
+@suppress_gui()
 def plot_summary_image(
-    results,
-    data,
-    save_filepath, 
-    fps=None, 
-    trace_stack_offset_std=6.0,
-    cmap="viridis",
-    dpi=300
+    roi_masks: np.ndarray,
+    roi_traces: np.ndarray,
+    roi_labels: np.ndarray,
+    md: dict,
+    n_frames: int,
+    background_img: np.ndarray,
+    save_filepath: Path, 
+    fps: int | float, 
+    trace_stack_offset_std: float,
+    cmap: str,
+    dpi: int,
+    title: str = "Spatial Layout & Activity Summary", 
     ):
     """
     Renders a static summary plot using a Maximum Intensity Projection (MIP)
-    and stacked activity traces with temporal grid lines and matching labels.
+    and stacked activity traces.
+    Features: 
+      - Colored labels matching ROIs
+      - Randomized label positioning (Top/Bottom/Left/Right)
+      - Boundary checks to keep labels inside image
     """
-    if fps is None:
-        fps = getattr(data, "fr", 30) or 30
-    
-    roi_masks = results["masks"] 
-    roi_traces = results["traces"] 
-    roi_labels = results["labels"]
 
     num_rois = len(roi_masks)
-    n_frames, height, width = data.shape
-    background_img = np.max(data, axis=0)
+    img_h, img_w = background_img.shape[:2] # Get image dimensions for boundary checks
 
     fig, (ax_map, ax_trace) = plt.subplots(
         1, 2, 
@@ -423,7 +486,7 @@ def plot_summary_image(
         gridspec_kw={"width_ratios": [1, 1.2]},
         dpi=dpi
     )
-    fig.suptitle("Spatial Layout & Activity Summary", fontsize=20, fontweight="bold", y=0.95)
+    fig.suptitle(title, fontsize=20, fontweight="bold", y=0.95)
 
     try:
         colors = plt.get_cmap(cmap)(np.linspace(0, 1, num_rois))
@@ -436,15 +499,76 @@ def plot_summary_image(
 
     for i in range(num_rois):
         contours = find_contours(roi_masks[i], 0.5)
-        for contour in contours:
+        
+        # Find the largest blob to label
+        largest_contour_idx = -1
+        max_len = 0
+        for c_idx, c in enumerate(contours):
+            if len(c) > max_len:
+                max_len = len(c)
+                largest_contour_idx = c_idx
+
+        for c_idx, contour in enumerate(contours):
             ax_map.plot(contour[:, 1], contour[:, 0], linewidth=1.2, color=colors[i])
             
-            cy, cx = np.mean(contour[:, 0]), np.mean(contour[:, 1])
-            ax_map.text(cx, cy, roi_labels[i], color="#00FFFF", fontsize=8, 
-                        ha="center", va="center", fontweight="bold")
-            
+            # --- New Labelling Logic ---
+            if c_idx == largest_contour_idx:
+                # Extract coordinates (y=row, x=col)
+                ys = contour[:, 0]
+                xs = contour[:, 1]
+                
+                # Identify 4 cardinal points on the blob
+                min_y_idx, max_y_idx = np.argmin(ys), np.argmax(ys)
+                min_x_idx, max_x_idx = np.argmin(xs), np.argmax(xs)
+
+                # Create candidates: (y, x, vertical_align, horizontal_align)
+                # 'va=bottom' means text sits ON TOP of the anchor point
+                # 'va=top' means text hangs BELOW the anchor point
+                candidates = [
+                    (ys[min_y_idx], xs[min_y_idx], 'bottom', 'center'), # Top Edge
+                    (ys[max_y_idx], xs[max_y_idx], 'top', 'center'),    # Bottom Edge
+                    (ys[min_x_idx], xs[min_x_idx], 'center', 'right'),  # Left Edge
+                    (ys[max_x_idx], xs[max_x_idx], 'center', 'left')    # Right Edge
+                ]
+                
+                # Randomize the candidates to avoid clustering
+                np.random.shuffle(candidates)
+                
+                # Select the first valid candidate that fits within boundaries
+                final_pos = candidates[0] # Fallback
+                margin = img_h * 0.05     # 5% buffer from edge (approx 20-50px)
+
+                for y, x, va, ha in candidates:
+                    is_safe = True
+                    
+                    # Check Top Boundary
+                    if va == 'bottom' and y < margin: is_safe = False
+                    # Check Bottom Boundary
+                    if va == 'top' and y > (img_h - margin): is_safe = False
+                    # Check Left Boundary
+                    if ha == 'right' and x < margin: is_safe = False
+                    # Check Right Boundary
+                    if ha == 'left' and x > (img_w - margin): is_safe = False
+                    
+                    if is_safe:
+                        final_pos = (y, x, va, ha)
+                        break
+
+                # Plot Text
+                # 1. Use colors[i] for text color
+                # 2. Add white stroke for readability on dark background
+                txt = ax_map.text(
+                    final_pos[1], final_pos[0], 
+                    roi_labels[i], 
+                    color=colors[i], 
+                    fontsize=9, 
+                    ha=final_pos[3], 
+                    va=final_pos[2], 
+                    fontweight="bold"
+                )
+                txt.set_path_effects([pe.withStroke(linewidth=2, foreground="white")])
+
     bar_length_um = 100
-    md = data.meta_data[0]
     bar_length_px = bar_length_um / md["scale"]
     scalebar = AnchoredSizeBar(ax_map.transData, bar_length_px, f"{bar_length_um} \u03bcm", 
                                 "lower right", pad=0.5, color="white", frameon=False, size_vertical=2)
@@ -457,13 +581,22 @@ def plot_summary_image(
     ax_trace.set_title("Activity Traces (Z-scored)")
     
     for i in range(num_rois):
-        trace_z = zscore(roi_traces[i])
+        raw_trace = roi_traces[i]
         offset = i * trace_stack_offset_std
+
+        # Handle Zero Traces
+        if np.std(raw_trace) == 0:
+            trace_z = np.zeros_like(raw_trace)
+        else:
+            # Auto-Flip based on Skewness
+            if skew(raw_trace) < 0:
+                raw_trace = -raw_trace
+            trace_z = zscore(raw_trace)
         
-        # Plot the trace
-        ax_trace.plot(time_seconds, trace_z + offset, color=colors[i], linewidth=0.8)
+        # Plot (inverted y-axis logic: offset - trace)
+        ax_trace.plot(time_seconds, offset - trace_z, color=colors[i], linewidth=0.8)
         
-        # Label the trace with matching ROI ID
+        # Label the trace
         ax_trace.text(
             -0.01 * time_seconds[-1], 
             offset, 
@@ -488,28 +621,366 @@ def plot_summary_image(
     for spine in ["top", "right", "left"]:
         ax_trace.spines[spine].set_visible(False)
 
-    plt.tight_layout()
-    fig.savefig(save_filepath / "summary_image.png", dpi=dpi, bbox_inches="tight")
+    plt.tight_layout(rect=[0, 0, 1, 0.92])
+    fig.savefig(save_filepath, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
     logger.info("Summary Image saved successfully.")
 
 
 @suppress_gui()
-def plot_gt_masks(
-    data: cm.movie,
-    gt: dict,
-    save_filepath: Path,
+def plot_segmentation_comparison(
+    gt_masks: np.ndarray,
+    pred_masks: np.ndarray,
+    gt_binary: np.ndarray,
+    tp_pairs: list,
+    fn_indices: list,
+    fp_indices: list,
+    ignored_indices: list,
+    results: dict,
+    save_path: Path,
     ):
     """
-    Wrapper function to plot the ground truth segmentation masks
-    from the Experiment pipeline.
+    Handles the visualization of segmentation performance.
     """
-    plot_contours(
-        masks=gt["spatial"],
-        labels=gt["labels"],
-        background_img=np.max(data, axis=0),
-        save_filepath=save_filepath / "gt_image.png",
+    h, w = gt_masks.shape[1], gt_masks.shape[2]
+    
+    plt.figure(figsize=(12, 12), dpi=150)
+    plt.imshow(np.zeros((h, w)), cmap="gray", interpolation="nearest")
+    
+    # 1. Plot False Negatives (Missed GTs)
+    # Using the passed gt_binary for consistency with the calculation
+    for idx in fn_indices:
+        plt.contour(gt_binary[idx], colors="blue", linewidths=1.0, linestyles="dashed")
+
+    # 2. Plot True Positives (Matched Pairs)
+    for _, pred_idx in tp_pairs:
+        plt.contour(pred_masks[pred_idx], colors="lime", linewidths=1.5)
+
+    # 3. Plot False Positives (Noise)
+    for idx in fp_indices:
+        plt.contour(pred_masks[idx], colors="red", linewidths=1.5)
+
+    # 4. Plot Ignored (Fragments/partial overlaps)
+    for idx in ignored_indices:
+        plt.contour(pred_masks[idx], colors="yellow", linewidths=1.0, alpha=0.7)
+
+    # Legend & Title
+    tp_count = results["spatial"]["true_positives"]
+    fn_count = results["spatial"]["false_negatives"]
+    fp_count = results["spatial"]["false_positives"]
+    
+    legend_elements = [
+        Patch(facecolor="lime", edgecolor="lime", label=f"TP: Match ({tp_count})"),
+        Patch(facecolor="blue", edgecolor="blue", linestyle="--", label=f"FN: Missed GT ({fn_count})"),
+        Patch(facecolor="red", edgecolor="red", label=f"FP: Noise ({fp_count})"),
+        Patch(facecolor="yellow", edgecolor="yellow", label=f"Ignored: Fragments ({len(ignored_indices)})"),
+    ]
+    
+    plt.legend(handles=legend_elements, loc="upper right")
+    
+    title_str = (f"Performance\n"
+                 f"Recall: {results['spatial']['recall']:.2f} | Precision: {results['spatial']['precision']:.2f}")
+    plt.title(title_str)
+    plt.axis("off")
+    
+    plt.savefig(save_path / "segmentation_performance.png", bbox_inches="tight", dpi=300)
+    plt.close()
+
+
+@suppress_gui()
+def plot_temporal_comparison(
+    gt_traces: np.ndarray,
+    pred_traces: np.ndarray,
+    tp_pairs: list,
+    save_path: Path,
+    fps: float,
+    title: str = "Temporal Comparison",
+    pred_labels: list = None
+    ):
+    """
+    Plots a stacked comparison of ALL True Positive calcium traces.
+    Dynamically adjusts figure height. Flips negative correlations.
+    Includes grid lines and visible Y-axis.
+    """
+    n_pairs = len(tp_pairs)
+    
+    if n_pairs == 0:
+        logger.warning("No True Positives found. Skipping temporal plot.")
+        return
+
+    # Dynamic Figure Height: 2 inches per subplot
+    fig_height = max(4, 2.0 * n_pairs)
+    
+    fig, axes = plt.subplots(n_pairs, 1, figsize=(10, fig_height), dpi=150, sharex=True)
+    
+    fig.suptitle(title, fontsize=16, fontweight="bold", y=0.98)
+
+    if n_pairs == 1:
+        axes = [axes]
+
+    gt_color = "#333333"
+    pred_color = "#FF5733"
+    
+    for i, (gt_idx, pred_idx) in enumerate(tp_pairs):
+        ax = axes[i]
+        
+        t_gt = gt_traces[gt_idx].flatten()
+        t_pred = pred_traces[pred_idx].flatten()
+        
+        # Normalize (0-1)
+        t_gt_norm = (t_gt - np.min(t_gt)) / (np.ptp(t_gt) + 1e-8)
+        t_pred_norm = (t_pred - np.min(t_pred)) / (np.ptp(t_pred) + 1e-8)
+        
+        # Calculate Correlation
+        if np.std(t_gt) == 0 or np.std(t_pred) == 0:
+            corr = 0.0
+        else:
+            corr = np.corrcoef(t_gt, t_pred)[0, 1]
+
+        # --- FLIP LOGIC ---
+        is_flipped = False
+        if corr < 0:
+            t_pred_norm = 1 - t_pred_norm
+            is_flipped = True
+
+        # Plotting
+        time_axis = np.arange(len(t_gt)) / fps
+        ax.plot(time_axis, t_gt_norm, color=gt_color, linewidth=1.5, alpha=0.8, label="Ground Truth")
+        ax.plot(time_axis, t_pred_norm, color=pred_color, linewidth=1.2, linestyle="--", label="Prediction")
+        
+        # --- Custom Labelling Logic ---
+        p_name = pred_labels[pred_idx] if pred_labels else pred_idx
+        flip_text = " (trace inverted)" if is_flipped else ""
+        label_text = f"Pair #{i+1} (GT {gt_idx} | Pred {p_name}) - Pearson r: {corr:.3f}{flip_text}"
+        
+        ax.text(0.01, 0.85, label_text, 
+                transform=ax.transAxes, fontsize=10, fontweight='bold', 
+                bbox=dict(facecolor='white', alpha=0.9, edgecolor='none', pad=2))
+        
+        # --- STYLING UPDATES ---
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        
+        # 1. Make Left Spine Visible (The Y-axis line)
+        ax.spines['left'].set_visible(True)
+        ax.spines['left'].set_linewidth(0.5)
+        ax.spines['bottom'].set_linewidth(0.5)
+        
+        # 2. Add Subtle Grid
+        # alpha=0.3 makes it very faint; linestyle=':' makes it dotted
+        ax.grid(True, which='major', axis='both', linestyle=':', color='gray', alpha=0.3)
+
+        # Y-Axis Scale
+        ax.set_yticks([0, 0.5, 1])
+        ax.set_yticklabels(["0", "0.5", "1"], fontsize=8)
+        ax.set_ylabel("Norm.\nAmp.", fontsize=8, rotation=0, labelpad=20, va="center")
+
+        if i == 0:
+            ax.legend(loc="upper right", frameon=False, fontsize=9)
+            
+    axes[-1].set_xlabel("Time (s)", fontsize=11)
+    
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    
+    plt.savefig(save_path / "temporal_performance.png", bbox_inches="tight")
+    plt.close()
+
+
+@suppress_gui()
+def plot_gt_overlay(
+    gt_masks: np.ndarray,
+    gt_traces: np.ndarray,
+    pred_masks: np.ndarray,
+    pred_traces: np.ndarray,
+    tp_pairs: list,
+    md: dict,
+    save_path: Path, 
+    fps: int | float, 
+    n_frames: int,
+    trace_stack_offset_std: float = 5.0,
+    cmap: str = "viridis",
+    dpi: int = 200,
+    title: str = "Ground Truth vs. Prediction Overlay", 
+    ):
+    """
+    Renders a hybrid summary plot:
+    - Left: Existing GT Gaussian blobs (grayscale) with Prediction contours overlaid.
+    - Right: Stacked GT traces (grey) overlaid with Prediction traces (colored, dotted).
+    """
+
+    n_pairs = len(tp_pairs)
+    if n_pairs == 0:
+        logger.warning("No matches to plot.")
+        return
+
+    # Image Dimensions from the first mask
+    img_h, img_w = gt_masks[0].shape
+
+    fig, (ax_map, ax_trace) = plt.subplots(
+        1, 2, 
+        figsize=(18, 10), 
+        gridspec_kw={"width_ratios": [1, 1.2]},
+        dpi=dpi
     )
+    fig.suptitle(title, fontsize=20, fontweight="bold", y=0.96)
+
+    try:
+        colors = plt.get_cmap(cmap)(np.linspace(0, 1, n_pairs))
+    except AttributeError:
+        raise ValueError(f"Colormap {cmap} not found.")
+
+    # ==========================================
+    # 1. LEFT PLOT: GT Background + Pred Overlay
+    # ==========================================
+    
+    # Composite the pre-existing Gaussian blobs
+    gt_composite = np.zeros((img_h, img_w), dtype=float)
+    
+    for mask in gt_masks:
+        blob = mask.astype(float)
+        
+        # Normalize blob so max is 1.0 
+        # (Ensures the 0.25 cutoff works consistently for every blob)
+        if blob.max() > 0:
+            blob /= blob.max()
+            
+        # Add to composite using max projection
+        gt_composite = np.maximum(gt_composite, blob)
+
+    # Apply Cutoff: Pixels < 0.25 intensity become 0 (Black background)
+    gt_composite[gt_composite < 0.25] = 0
+    
+    # Plot GT Background
+    ax_map.imshow(gt_composite, cmap="gray", vmin=0, vmax=1, origin='upper')
+
+    # Plot Prediction Contours (Matched Only)
+    for i, (gt_idx, pred_idx) in enumerate(tp_pairs):
+        # We find contours on the binary prediction mask
+        contours = find_contours(pred_masks[pred_idx], 0.5)
+        
+        largest_contour_idx = -1
+        max_len = 0
+        for c_idx, c in enumerate(contours):
+            if len(c) > max_len:
+                max_len = len(c)
+                largest_contour_idx = c_idx
+
+        for c_idx, contour in enumerate(contours):
+            ax_map.plot(contour[:, 1], contour[:, 0], linewidth=1.5, color=colors[i])
+            
+            # --- Smart Labelling ---
+            if c_idx == largest_contour_idx:
+                ys, xs = contour[:, 0], contour[:, 1]
+                min_y, max_y = np.argmin(ys), np.argmax(ys)
+                min_x, max_x = np.argmin(xs), np.argmax(xs)
+
+                # Anchor Candidates
+                candidates = [
+                    (ys[min_y], xs[min_y], 'bottom', 'center'),
+                    (ys[max_y], xs[max_y], 'top', 'center'),
+                    (ys[min_x], xs[min_x], 'center', 'right'),
+                    (ys[max_x], xs[max_x], 'center', 'left')
+                ]
+                np.random.shuffle(candidates)
+                
+                # Boundary Checks
+                final_pos = candidates[0]
+                margin = img_h * 0.05
+                for y, x, va, ha in candidates:
+                    is_safe = True
+                    if va == "bottom" and y < margin: is_safe = False
+                    if va == "top" and y > (img_h - margin): is_safe = False
+                    if ha == "right" and x < margin: is_safe = False
+                    if ha == "left" and x > (img_w - margin): is_safe = False
+                    if is_safe:
+                        final_pos = (y, x, va, ha)
+                        break
+
+                label_txt = f"P{pred_idx}"
+                txt = ax_map.text(
+                    final_pos[1], final_pos[0], 
+                    label_txt, 
+                    color=colors[i], 
+                    fontsize=9, 
+                    ha=final_pos[3], 
+                    va=final_pos[2], 
+                    fontweight="bold"
+                )
+                txt.set_path_effects([pe.withStroke(linewidth=2, foreground="white")])
+
+    if "scale" in md:
+        bar_length_um = 100
+        bar_length_px = bar_length_um / md["scale"]
+        scalebar = AnchoredSizeBar(ax_map.transData, bar_length_px, f"{bar_length_um} \u03bcm", 
+                                    "lower right", pad=0.5, color="white", frameon=False, size_vertical=2)
+        ax_map.add_artist(scalebar)
+    
+    ax_map.set_title("Background: GT (Gray) | Overlay: Prediction (Color)", fontsize=14)
+    ax_map.axis("off")
+
+    # ==========================================
+    # 2. RIGHT PLOT: Stacked Hybrid Traces
+    # ==========================================
+    time_seconds = np.arange(n_frames) / fps
+    ax_trace.set_title("Trace Comparison (Solid: GT | Dotted: Pred)")
+    
+    for i, (gt_idx, pred_idx) in enumerate(tp_pairs):
+        offset = i * trace_stack_offset_std
+        
+        # --- Prepare GT Trace (Baseline) ---
+        raw_gt = gt_traces[gt_idx]
+        if np.std(raw_gt) == 0:
+            gt_z = np.zeros_like(raw_gt)
+        else:
+            if skew(raw_gt) < 0: raw_gt = -raw_gt
+            gt_z = zscore(raw_gt)
+
+        # --- Prepare Pred Trace (Overlay) ---
+        raw_pred = pred_traces[pred_idx]
+        if np.std(raw_pred) == 0:
+            pred_z = np.zeros_like(raw_pred)
+        else:
+            # Match flip to GT
+            corr = np.corrcoef(raw_gt, raw_pred)[0, 1] if np.std(raw_gt) > 0 else 0
+            if corr < 0:
+                raw_pred = -raw_pred
+            pred_z = zscore(raw_pred)
+
+        # Plot GT (Solid Gray)
+        ax_trace.plot(time_seconds, offset - gt_z, color="#444444", linewidth=1.5, alpha=0.6, zorder=1)
+        
+        # Plot Prediction (Dotted Color)
+        ax_trace.plot(time_seconds, offset - pred_z, color=colors[i], linewidth=1.2, linestyle=":", zorder=2)
+        
+        # Label
+        label_text = f"Pair {i+1} (G{gt_idx}/P{pred_idx})"
+        ax_trace.text(
+            -0.01 * time_seconds[-1], 
+            offset, 
+            label_text, 
+            color=colors[i], 
+            fontweight="bold", 
+            ha="right", 
+            va="center", 
+            fontsize=8
+        )
+        
+        ax_trace.axhline(y=offset, color="gray", linestyle="-", linewidth=0.3, alpha=0.3)
+
+    ax_trace.plot([time_seconds[-1] * 1.02, time_seconds[-1] * 1.02], [0, 2], color="black", lw=1.5)
+    ax_trace.text(time_seconds[-1] * 1.03, 1, "2 SD", rotation=270, va="center")
+
+    ax_trace.set_xlabel("Time (s)", fontsize=12)
+    ax_trace.set_xlim(-0.15 * time_seconds[-1], time_seconds[-1])
+    ax_trace.set_yticks([])
+    ax_trace.invert_yaxis()
+    
+    for spine in ["top", "right", "left"]:
+        ax_trace.spines[spine].set_visible(False)
+
+    plt.tight_layout(rect=[0, 0, 1, 0.92])
+    fig.savefig(save_path / "gt_overlay.png", dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
 
 
 def render_inference_video(

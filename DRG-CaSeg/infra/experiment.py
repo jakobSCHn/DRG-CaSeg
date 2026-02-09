@@ -53,6 +53,7 @@ class Experiment:
 
             data = payload["data"]
             gt = payload.get("gt", [])
+            gt["fps"] = data.fr
 
             #Preprocess the loaded data
             if steps_pre:
@@ -71,13 +72,6 @@ class Experiment:
             #Data Analysis
             for ana in analysis_methods:    
                 logger.info(f"Analyzing data with Analysis ID: {ana["id"]}")
-                analyzer = configure_callable(
-                    id=ana["id"],
-                    import_path=ana["function"],
-                    params=ana.get("params", {}),
-                    context=runtime_context,
-                )
-                results = analyzer(data)
 
                 save_path = setup_experiment_folder(
                     experiment_name=self.name,
@@ -86,6 +80,18 @@ class Experiment:
                     data_id=data_cfg["id"],
                     ana_id=ana["id"],
                 )
+
+                analyzer = configure_callable(
+                    id=ana["id"],
+                    import_path=ana["function"],
+                    params={
+                        **ana.get("params", {}),
+                        "save_filepath": save_path,
+                    },
+                    context=runtime_context,
+                )
+                results = analyzer(data)
+
 
                 if visualization:
                     for vis in visualization:
@@ -104,21 +110,24 @@ class Experiment:
                         )
                         plotter()
 
+                metrics = results.get("analysis_stats", {})
+
                 if evaluation_methods and len(gt) > 0:
                     for eva in evaluation_methods:
                         logger.info(f"Evaluating with Evaluation ID: {eva["id"]}")
                         evaluator = configure_callable(
                             id=eva["id"],
                             import_path=eva["function"],
-                            params=eva.get("params", {}),
+                            params={
+                                **eva.get("params", {}),
+                                "save_filepath": save_path,
+                            },
                             context=runtime_context,
                         )
-                        metrics = evaluator(res=results, gt=gt)
-                        logger.info(f"Evaluation Results for {data_cfg["id"]}:")
-                        logger.info(f"  Precision: {metrics["spatial"]["precision"]:.4f}")
-                        logger.info(f"  Mean IoU:  {metrics["temporal"]["mean_correlation"]:.4f}")
 
+                        metrics.update(evaluator(res=results, gt=gt))
                         save_dict_to_yaml(metrics, save_path=save_path / "metrics.yaml")
+
                 else:
                     logger.warning("No Evaluation configured.")
 

@@ -110,30 +110,28 @@ preprocessing:
       max_intensity: 255 
 
 analysis:
-  - id: "ica_mukamel_mu_0.2"
+  - id: "ica_mu_0.2"
     function: analysis_utils.workflow.run_ica
     params:
       mu: 0.2
-  - id: "ica_mukamel_mu_0.5"
+  - id: "ica_mu_0.5"
     function: analysis_utils.workflow.run_ica
     params:
       mu: 0.5
-  - id: "ica_mukamel_mu_0.8"
+  - id: "ica_mu_0.8"
     function: analysis_utils.workflow.run_ica
     params:
       mu: 0.8
 
 visualization:
   - id: "ground_truth_plot"
-    function: data_utils.plotter.plot_gt_masks
-  - id: "plot_static_output"
-    function: data_utils.plotter.plot_summary_image
-    
-
+    function: data_utils.plot_adapters.plot_gt_summary
+  - id: "prediction_plot"
+    function: data_utils.plot_adapters.plot_prediction_summary
 
 evaluation:
-  - id: "IoU"
+  - id: "overlap_metric"
     function: analysis_utils.workflow.evaluate_model_performance
     params:
-      iou_threshold: 0.5
+      coverage_threshold: 0.6
   

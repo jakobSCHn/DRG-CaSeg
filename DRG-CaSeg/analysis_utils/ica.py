@@ -2,11 +2,14 @@ import numpy as np
 import logging
 
 import skimage.measure as ms
+import cv2
 
-from scipy.stats import skew, kurtosis
+from scipy.stats import skew, kurtosis, median_abs_deviation
 from scipy.linalg import inv, sqrtm
 
 from scipy.ndimage import label, binary_opening, binary_closing
+from skimage.measure import regionprops
+from skimage.morphology import disk
 from scipy.ndimage import sum as ndi_sum
 
 from data_utils.plotter import plot_image
@@ -209,13 +212,56 @@ def _fpica_standardica(x, nIC, w_init, termtol, maxrounds):
         return b, iternum
 
 
+def _extract_cells(
+    mask,
+    min_size,
+    max_size,
+    eccentricity_thresh=0.8,
+    solidity_thresh=0.6,
+    ):
+    """
+    Filters a binary mask to keep only roundish, cell-like blobs within size limits.
+    """
+
+    # 2. Label connected components
+    closed_mask = binary_closing(mask, disk(2))
+    labeled_image = label(closed_mask)
+    
+    # 3. Create a blank mask for the result
+    cleaned_mask = np.zeros_like(mask, dtype=bool)
+
+    # 4. Iterate through every blob found
+    for region in regionprops(labeled_image):
+        
+        # --- CRITERIA TUNING ---
+        # Size Filtering
+        if region.area < min_size or region.area > max_size:
+            continue
+
+        # Eccentricity (Roundness)
+        # 0 = circle, 1 = line. 
+        if region.eccentricity > eccentricity_thresh:
+            continue
+            
+        # Solidity (Regularity)
+        if region.solidity < solidity_thresh: 
+            continue
+
+        # 5. If it passes, add it to the clean mask
+        # We use the coordinates of the region to set pixels to True
+        for coords in region.coords:
+            cleaned_mask[coords[0], coords[1]] = True
+            
+    return cleaned_mask
+
+
 def extract_rois_and_traces(
     spatial_filters, 
     temporal_signals, 
-    kurtosis_thresh=5.0, 
-    z_thresh=2, 
-    min_size=25, 
-    max_size=25000,
+    min_size, 
+    max_size,
+    kurtosis_thresh,
+    z_thresh,
     ):
     """
     Selects neuron-like ICA components and extracts a list of individual 
@@ -243,6 +289,9 @@ def extract_rois_and_traces(
     final_roi_masks = []
     final_roi_traces = []
     roi_labels = []
+    used_components = []
+    bin_masks = []
+    cl_masks = []
 
     logger.info(f"Processing {n_components} spatial filters...")
 
@@ -257,35 +306,46 @@ def extract_rois_and_traces(
             logger.info(f"  [Component {i:2d}]: SELECTED (Kurtosis = {k:.2f})")
             
 
-            # --- Mask Generation (same as before) ---
+            # --- Mask Generation ---
             mean_val = np.mean(component_img)
             std_val = np.std(component_img)
             binary_mask = np.abs(component_img - mean_val) > (z_thresh * std_val)
-            
-            structure = np.ones((5, 5))
-            cleaned_mask = binary_opening(binary_mask, structure=structure)
-            cleaned_mask = binary_closing(cleaned_mask, structure=structure).astype(int)
-            
-            labeled_array, num_features = label(cleaned_mask)
-            
-            if num_features == 0:
-                continue
 
+            structure = np.array(
+                [[0, 1, 0],
+                 [1, 1, 1],
+                 [0, 1, 0]]
+            )
+            cleaned_mask = binary_opening(binary_mask, structure=structure)
+
+            labeled_array, num_features = label(binary_mask)
+            blob_labels = np.arange(1, num_features + 1)
+            blob_sizes = ndi_sum(cleaned_mask, labeled_array, index=blob_labels)
+            good_blob_labels = blob_labels[(blob_sizes >= min_size) & 
+                                        (blob_sizes <= max_size)]
+            cleaned_mask = np.isin(labeled_array, good_blob_labels)
+
+            cleaned_mask = binary_closing(cleaned_mask, structure=structure).astype(int)
+            cleaned_mask = binary_opening(cleaned_mask, structure=structure)
+
+            
+            # Re-label the component_mask to separate any non-contiguous blobs
+            labeled_rois, num_rois = label(cleaned_mask)
+            if num_rois == 0:
+                continue
             blob_labels = np.arange(1, num_features + 1)
             blob_sizes = ndi_sum(cleaned_mask, labeled_array, index=blob_labels)
             good_blob_labels = blob_labels[(blob_sizes >= min_size) & 
                                            (blob_sizes <= max_size)]
-            
-            if good_blob_labels.size == 0:
-                continue
-                
-            logger.info(f"  [Component {i:2d}]: Found {good_blob_labels.size} good blobs.")
-            
-            # Find all pixels belonging to any good blob from this component
             component_mask = np.isin(labeled_array, good_blob_labels)
-            
-            # Re-label the component_mask to separate any non-contiguous blobs
             labeled_rois, num_rois = label(component_mask)
+
+            bin_masks.append(binary_mask)
+            cl_masks.append(component_mask)
+
+            logger.info(f"  [Component {i:2d}]: Found {good_blob_labels.size} good blobs.")
+            used_components.append(i)
+
             use_suffix = num_rois > 1
             
             # Add each individual blob as its own ROI
@@ -306,5 +366,16 @@ def extract_rois_and_traces(
     # Convert lists of results to a 2D numpy array
     final_roi_masks_array = np.array(final_roi_masks)
     final_roi_traces_array = np.array(final_roi_traces)
+
+    binary_masks = np.stack(bin_masks, axis=0)
+    cleaned_masks = np.stack(cl_masks, axis=0)
     
-    return final_roi_masks_array, final_roi_traces_array, roi_labels
+    return (
+        final_roi_masks_array,
+        final_roi_traces_array,
+        roi_labels,
+        n_components,
+        used_components,
+        binary_masks,
+        cleaned_masks,
+    )

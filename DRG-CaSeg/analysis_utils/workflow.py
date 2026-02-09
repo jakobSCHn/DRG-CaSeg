@@ -2,19 +2,23 @@ import logging
 import numpy as np
 import caiman as cm
 
-from scipy.optimize import linear_sum_assignment
+from pathlib import Path
 
 from analysis_utils.pca import cellsort_pca
 from analysis_utils.ica import ica_mukamel, extract_rois_and_traces
 from analysis_utils.metrics import compute_iou_matrix, calculate_overlap_correlation
+from data_utils.plotter import plot_spatial_filters
 
 logger = logging.getLogger(__name__)
 
 def run_ica(
     mov: cm.movie,
+    save_filepath: Path,
     n_pcs: int | tuple[int, int] = 20,
     mu=0.5,
     maxrounds=200,
+    kurtosis_thres=5.0,
+    z_thres=3,
     minsize=25,
     maxsize=25000,
     ):
@@ -37,20 +41,58 @@ def run_ica(
         maxrounds=maxrounds,
     )
 
-    masks, traces, labels = extract_rois_and_traces(
+    plot_spatial_filters(
+        spatial_filters=ica_filters,
+        save_filepath=save_filepath,
+        title="ICA Spatial Components",
+        subtitle="IC",
+        file_ext="spatial_components.png",
+    )
+
+    (
+        masks,
+        traces,
+        labels,
+        n_components,
+        used_components,
+        binary_mask,
+        cleaned_mask,
+    )= extract_rois_and_traces(
         spatial_filters=ica_filters,
         temporal_signals=ica_sig,
         min_size=minsize,
         max_size=maxsize,
+        kurtosis_thresh=kurtosis_thres,
+        z_thresh=z_thres,
+    )
+
+    plot_spatial_filters(
+        spatial_filters=binary_mask,
+        save_filepath=save_filepath,
+        title="Binary Masks extracted from Independent Components",
+        subtitle="Binary Mask",
+        file_ext="binary_masks.png"
+    )
+    plot_spatial_filters(
+        spatial_filters=cleaned_mask,
+        save_filepath=save_filepath,
+        title="Cleand Masks extracted from Independent Components",
+        subtitle="Cleaned Mask",
+        file_ext="cleaned_masks.png"
     )
 
 
-    # 3. Return a dictionary for safe unpacking (matching your loader pattern)
+    #Return a dictionary for safe unpacking
     return {
         "masks": masks,
         "traces": traces,
         "labels": labels,
+        "analysis_stats": {
+            "n_components": n_components,
+            "used_components": used_components,
+        }
     }
+
 
 def evaluate_segmentation(
     res: np.ndarray, 
@@ -122,14 +164,33 @@ def evaluate_segmentation(
 def evaluate_model_performance(
     res,
     gt,
+    save_filepath,
     coverage_threshold: float = 0.6,
+    gt_match_threshold: float = 0.4,
+    gt_binary_threshold: float = 0.25,
     ):
+    """
+    Wraps the model performance analysis to be compatible with 
+    the experiment pipeline.
+    
+    :param res: Description
+    :param gt: Description
+    :param save_filepath: Description
+    :param coverage_threshold: Description
+    :param gt_match_threshold: Description
+    :param gt_binary_threshold: Description
+    """
     metrics = calculate_overlap_correlation(
         pred_masks=res["masks"],
         gt_masks=gt["spatial"],
         pred_traces=res["traces"],
         gt_traces=gt["temporal"],
+        pred_labels=res["labels"],
+        save_filepath=save_filepath,
         coverage_threshold=coverage_threshold,
+        gt_match_threshold=gt_match_threshold,
+        gt_binary_threshold=gt_binary_threshold,
+        fps=gt["fps"],
     )
 
     return metrics
