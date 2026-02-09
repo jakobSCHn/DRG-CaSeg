@@ -12,6 +12,7 @@ import matplotlib.patheffects as pe
 import cv2
 import math
 import caiman as cm
+import matplotlib.gridspec as gridspec
 
 from skimage.measure import find_contours
 from matplotlib.patches import Patch
@@ -451,6 +452,63 @@ def plot_spatial_filters(
     fig.savefig(save_filepath / file_ext, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
     logger.info("Display of spatial components saved successfully.")
+
+@suppress_gui()
+def plot_ica_components(
+    spatial_filters,
+    time_courses,
+    save_filepath,
+    sampling_rate=1.0,
+    unit="ΔF/F",
+    cmap="Greens",
+    dpi=300,
+    title="ICA Temporal & Spatial Components",
+    subtitle="IC",
+    file_ext="ica_components_combined.png"
+):
+    n_filters = spatial_filters.shape[0]
+    if n_filters == 0:
+        raise ValueError("No filters found to plot.")
+
+    ncols = 2 if n_filters > 1 else 1
+    nrows_groups = math.ceil(n_filters / ncols)
+
+    # ADJUSTMENT 1: Reduce the height multiplier if the whitespace is still too much
+    fig = plt.figure(figsize=(ncols * 6, nrows_groups * 4.5)) 
+    
+    # ADJUSTMENT 2: Move the title closer to the top edge (y=0.95 or 0.98)
+    fig.suptitle(title, fontsize=18, fontweight="bold", y=0.98)
+
+    # outer_grid remains mostly the same
+    outer_grid = gridspec.GridSpec(nrows_groups, ncols, figure=fig, hspace=0.4, wspace=0.3)
+
+    n_time_points = time_courses.shape[1]
+    time_axis = [t / sampling_rate for t in range(n_time_points)]
+
+    for i in range(n_filters):
+        inner_grid = outer_grid[i].subgridspec(2, 1, height_ratios=[2, 1], hspace=0.05)
+        
+        ax_spatial = fig.add_subplot(inner_grid[0])
+        ax_spatial.imshow(spatial_filters[i], cmap=cmap, interpolation="nearest", aspect="equal")
+        ax_spatial.set_title(f"{subtitle} #{i+1}", fontsize=14, fontweight="bold", pad=10)
+        ax_spatial.axis("off")
+
+        ax_time = fig.add_subplot(inner_grid[1])
+        ax_time.plot(time_axis, time_courses[i], color="#1b5e20", linewidth=1.2)
+        ax_time.set_xlabel("Time (s)", fontsize=10)
+        ax_time.set_ylabel(unit, fontsize=10)
+        ax_time.spines["top"].set_visible(False)
+        ax_time.spines["right"].set_visible(False)
+        ax_time.tick_params(labelsize=9)
+
+    # ADJUSTMENT 3: Explicitly define the top margin of the subplots
+    # top=0.92 tells Matplotlib to start the plots at 92% of the figure height
+    plt.subplots_adjust(top=0.96)
+
+    full_path = save_filepath / file_ext
+    fig.savefig(full_path, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+    logger.info(f"Enhanced ICA plot saved to {full_path}")
 
 
 @suppress_gui()

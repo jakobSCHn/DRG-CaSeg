@@ -107,7 +107,9 @@ preprocessing:
     function: data_utils.wrangler.scale_video
     params:
       min_intensity: 0
-      max_intensity: 255 
+      max_intensity: 255
+  - id: "normalization"
+    function: data_utils.wrangler.norm_video
 
 analysis:
   - id: "ica_mu_0.2"

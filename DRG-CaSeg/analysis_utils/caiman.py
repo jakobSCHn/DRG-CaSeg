@@ -23,7 +23,9 @@ def extract_cnmfe_results(
     masks = A_dense.reshape(dims + (-1,), order="F").transpose(2, 0, 1)
     bin_masks = masks > 0
 
-    return bin_masks, traces
+    labels = np.arange(len(bin_masks)).tolist()
+
+    return bin_masks, traces, labels
 
 
 def get_default_params(
@@ -121,7 +123,7 @@ def run_cnmfe(
     mov: cm.movie,
     temp_path = None,
     cluster = None,
-    n_processes: int = 1,
+    n_processes: int = 2,
     **params,   
     ):
 
@@ -150,7 +152,7 @@ def run_cnmfe(
         
         cnmfe_model.fit(images)
 
-        masks, traces = extract_cnmfe_results(
+        masks, traces, labels = extract_cnmfe_results(
             model=cnmfe_model,
             dims=dims,
             )
@@ -158,6 +160,7 @@ def run_cnmfe(
         return {
             "masks": masks,
             "traces": traces,
+            "labels": labels,
         }
 
 

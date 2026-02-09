@@ -7,7 +7,7 @@ from pathlib import Path
 from analysis_utils.pca import cellsort_pca
 from analysis_utils.ica import ica_mukamel, extract_rois_and_traces
 from analysis_utils.metrics import compute_iou_matrix, calculate_overlap_correlation
-from data_utils.plotter import plot_spatial_filters
+from data_utils.plotter import plot_spatial_filters, plot_ica_components
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +31,7 @@ def run_ica(
         pcs=n_pcs
     )
 
-    # 2. Run ICA
-    # Note: Assuming ica_mukamel is inside the ica module
+
     ica_sig, ica_filters, ica_A, numiter = ica_mukamel(
         mixedsig=mixedsig,
         mixedfilters=mixedfilters,
@@ -48,6 +47,15 @@ def run_ica(
         subtitle="IC",
         file_ext="spatial_components.png",
     )
+    plot_ica_components(
+        spatial_filters=ica_filters,
+        time_courses=ica_sig,
+        save_filepath=save_filepath,
+        sampling_rate=30,
+        title="ICA Temporal & Spatial Components",
+        subtitle="IC",
+        file_ext="full_ica_components.png"
+    )
 
     (
         masks,
@@ -57,7 +65,7 @@ def run_ica(
         used_components,
         binary_mask,
         cleaned_mask,
-    )= extract_rois_and_traces(
+    ) = extract_rois_and_traces(
         spatial_filters=ica_filters,
         temporal_signals=ica_sig,
         min_size=minsize,

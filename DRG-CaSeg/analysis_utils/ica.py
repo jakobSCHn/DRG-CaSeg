@@ -311,32 +311,23 @@ def extract_rois_and_traces(
             std_val = np.std(component_img)
             binary_mask = np.abs(component_img - mean_val) > (z_thresh * std_val)
 
-            structure = np.array(
-                [[0, 1, 0],
-                 [1, 1, 1],
-                 [0, 1, 0]]
-            )
+            structure = np.ones((3, 3))
             cleaned_mask = binary_opening(binary_mask, structure=structure)
+            cleaned_mask = binary_closing(cleaned_mask, structure=structure)
 
-            labeled_array, num_features = label(binary_mask)
-            blob_labels = np.arange(1, num_features + 1)
-            blob_sizes = ndi_sum(cleaned_mask, labeled_array, index=blob_labels)
-            good_blob_labels = blob_labels[(blob_sizes >= min_size) & 
-                                        (blob_sizes <= max_size)]
-            cleaned_mask = np.isin(labeled_array, good_blob_labels)
-
-            cleaned_mask = binary_closing(cleaned_mask, structure=structure).astype(int)
-            cleaned_mask = binary_opening(cleaned_mask, structure=structure)
-
+            labeled_array, num_features = label(cleaned_mask)
             
-            # Re-label the component_mask to separate any non-contiguous blobs
-            labeled_rois, num_rois = label(cleaned_mask)
-            if num_rois == 0:
+            if num_features == 0:
                 continue
+
             blob_labels = np.arange(1, num_features + 1)
             blob_sizes = ndi_sum(cleaned_mask, labeled_array, index=blob_labels)
+            
             good_blob_labels = blob_labels[(blob_sizes >= min_size) & 
                                            (blob_sizes <= max_size)]
+            
+            if good_blob_labels.size == 0:
+                continue
             component_mask = np.isin(labeled_array, good_blob_labels)
             labeled_rois, num_rois = label(component_mask)
 

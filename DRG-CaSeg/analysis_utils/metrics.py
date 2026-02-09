@@ -212,7 +212,7 @@ def calculate_overlap_correlation(
         fps=fps,
         pred_labels=pred_labels,
     )
-    plotter.plot_match_summary(
+    plotter.plot_gt_overlay(
         gt_masks=gt_masks,
         gt_traces=gt_traces,
         pred_masks=pred_masks,

@@ -60,7 +60,21 @@ def scale_video(
 
     #throw a type error if it's not a cm.movie, as metadata will be lost
     if not isinstance(mov, cm.movie):
-        TypeError("wrong type")
+        raise TypeError(f"cm.movie objects has been cast to {type(mov)} during preprocessing.")
+
+    return mov
+
+def norm_video(
+    mov: cm.movie,
+    ):
+    time_means = np.mean(mov, axis=0)
+    mov = (mov / (time_means + 1e-6)) - 1
+
+    frame_means = np.mean(mov, axis=(1,2), keepdims=True)
+    mov = mov - frame_means
+
+    if not isinstance(mov, cm.movie):
+        raise TypeError(f"cm.movie objects has been cast to {type(mov)} during preprocessing.")
 
     return mov
 
