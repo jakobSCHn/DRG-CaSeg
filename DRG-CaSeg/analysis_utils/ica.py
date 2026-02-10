@@ -7,9 +7,10 @@ import cv2
 from scipy.stats import skew, kurtosis, median_abs_deviation
 from scipy.linalg import inv, sqrtm
 
-from scipy.ndimage import label, binary_opening, binary_closing
+from scipy.ndimage import label, binary_opening, binary_closing, median_filter
 from skimage.measure import regionprops
 from skimage.morphology import disk
+from skimage.segmentation import flood
 from scipy.ndimage import sum as ndi_sum
 
 from data_utils.plotter import plot_image
@@ -304,24 +305,30 @@ def extract_rois_and_traces(
         
         if k > kurtosis_thresh:
             logger.info(f"  [Component {i:2d}]: SELECTED (Kurtosis = {k:.2f})")
+
+            component_img -= component_img.mean()
+            component_img = median_filter(component_img, size=3)
             
 
-            # --- Mask Generation ---
-            mean_val = np.mean(component_img)
-            std_val = np.std(component_img)
-            binary_mask = np.abs(component_img - mean_val) > (z_thresh * std_val)
+            trace_skew = skew(component_trace)
+            if trace_skew > 0:
+                seed_point = np.unravel_index(np.argmax(component_img), component_img.shape)
+                peak = component_img[seed_point]
+                tol = 0.5 * np.abs(peak)
+                binary_mask = flood(component_img, seed_point, tolerance=tol)
+            else:
+                seed_point = np.unravel_index(np.argmin(component_img), component_img.shape)
+                peak = component_img[seed_point]
+                tol = 0.5 * np.abs(peak)
+                binary_mask = flood(component_img, seed_point, tolerance=tol)
 
-            structure = np.ones((3, 3))
-            cleaned_mask = binary_opening(binary_mask, structure=structure)
-            cleaned_mask = binary_closing(cleaned_mask, structure=structure)
-
-            labeled_array, num_features = label(cleaned_mask)
+            labeled_array, num_features = label(binary_mask)
             
             if num_features == 0:
                 continue
 
             blob_labels = np.arange(1, num_features + 1)
-            blob_sizes = ndi_sum(cleaned_mask, labeled_array, index=blob_labels)
+            blob_sizes = ndi_sum(binary_mask, labeled_array, index=blob_labels)
             
             good_blob_labels = blob_labels[(blob_sizes >= min_size) & 
                                            (blob_sizes <= max_size)]
