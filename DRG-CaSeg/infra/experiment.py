@@ -1,5 +1,6 @@
 import yaml
 import attrs
+import numpy as np
 
 from datetime import datetime
 from utils import save_dict_to_yaml
@@ -52,8 +53,11 @@ class Experiment:
             payload = loader()
 
             data = payload["data"]
+            md = payload.get("meta", [])
             gt = payload.get("gt", [])
             gt["fps"] = data.fr
+
+            background_img = np.percentile(data, 98, axis=0)
 
             #Preprocess the loaded data
             if steps_pre:
@@ -104,6 +108,7 @@ class Experiment:
                                 "results": results,
                                 "data": data,
                                 "gt": gt,
+                                "background_img": background_img,
                                 "save_filepath": save_path,
                             },
                             context=runtime_context,

@@ -112,6 +112,8 @@ preprocessing:
     function: data_utils.wrangler.norm_video
 
 analysis:
+  - id: "caiman_pilot"
+    function: analysis_utils.caiman.run_cnmfe
   - id: "ica_mu_0.2"
     function: analysis_utils.workflow.run_ica
     params:
@@ -127,9 +129,9 @@ analysis:
 
 visualization:
   - id: "ground_truth_plot"
-    function: data_utils.plot_adapters.plot_gt_summary
+    function: data_utils.plot_adapters.plot_adapter_gt_summary
   - id: "prediction_plot"
-    function: data_utils.plot_adapters.plot_prediction_summary
+    function: data_utils.plot_adapters.plot_adapter_prediction_summary
 
 evaluation:
   - id: "overlap_metric"

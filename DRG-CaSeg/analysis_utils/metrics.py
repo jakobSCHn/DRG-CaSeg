@@ -2,6 +2,7 @@ import numpy as np
 import logging
 
 import data_utils.plotter as plotter
+import data_utils.plot_adapters as adapt
 
 from pathlib import Path
 
@@ -210,9 +211,10 @@ def calculate_overlap_correlation(
         tp_pairs=tp_pairs,
         save_path=save_filepath,
         fps=fps,
+        title="Temporal Performance Comparison",
         pred_labels=pred_labels,
     )
-    plotter.plot_gt_overlay(
+    adapt.plot_adapter_gt_overlay(
         gt_masks=gt_masks,
         gt_traces=gt_traces,
         pred_masks=pred_masks,
@@ -222,6 +224,16 @@ def calculate_overlap_correlation(
         save_path=save_filepath,
         fps=fps,
         n_frames=n_frames,
+    )
+    plotter.plot_mask_comparison(
+        gt_masks=gt_masks,
+        gt_traces=gt_traces,
+        pred_masks=pred_masks,
+        pred_traces=pred_traces,
+        tp_pairs=tp_pairs,
+        save_filepath=save_filepath,
+        fps=fps,
+        file_ext="single_mask_comparison.png"
     )
     
     return results
