@@ -724,14 +724,13 @@ def plot_summary_image(
 
 
 @suppress_gui()
-def plot_segmentation_comparison(
+def plot_segmentation_performance(
     gt_masks: np.ndarray,
     pred_masks: np.ndarray,
     gt_binary: np.ndarray,
     tp_pairs: list,
     fn_indices: list,
     fp_indices: list,
-    ignored_indices: list,
     results: dict,
     save_path: Path,
     ):
@@ -756,20 +755,15 @@ def plot_segmentation_comparison(
     for idx in fp_indices:
         plt.contour(pred_masks[idx], colors="red", linewidths=1.5)
 
-    # 4. Plot Ignored (Fragments/partial overlaps)
-    for idx in ignored_indices:
-        plt.contour(pred_masks[idx], colors="yellow", linewidths=1.0, alpha=0.7)
-
     # Legend & Title
-    tp_count = results["spatial"]["true_positives"]
-    fn_count = results["spatial"]["false_negatives"]
-    fp_count = results["spatial"]["false_positives"]
+    tp_count = results["spatial"]["tp"]
+    fn_count = results["spatial"]["fn"]
+    fp_count = results["spatial"]["fp"]
     
     legend_elements = [
         Patch(facecolor="lime", edgecolor="lime", label=f"TP: Match ({tp_count})"),
         Patch(facecolor="blue", edgecolor="blue", linestyle="--", label=f"FN: Missed GT ({fn_count})"),
         Patch(facecolor="red", edgecolor="red", label=f"FP: Noise ({fp_count})"),
-        Patch(facecolor="yellow", edgecolor="yellow", label=f"Ignored: Fragments ({len(ignored_indices)})"),
     ]
     
     plt.legend(handles=legend_elements, loc="upper right")

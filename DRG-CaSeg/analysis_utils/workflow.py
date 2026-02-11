@@ -3,6 +3,7 @@ import numpy as np
 import caiman as cm
 
 from pathlib import Path
+from scipy.optimize import linear_sum_assignment
 
 from analysis_utils.pca import cellsort_pca
 from analysis_utils.ica import ica_mukamel, extract_rois_and_traces
@@ -103,9 +104,9 @@ def run_ica(
 
 
 def evaluate_segmentation(
-    res: np.ndarray, 
-    gt: dict, 
-    iou_threshold: float = 0.5
+    pred_masks: np.ndarray, 
+    gt_masks: np.ndarray, 
+    iou_threshold: float,
     ) -> dict:
     """
     Matches predicted masks to ground truth using Hungarian algorithm and computes metrics.
@@ -127,11 +128,18 @@ def evaluate_segmentation(
         }
     """
 
-    gt_spatial = gt["spatial"]
-    if gt_spatial.shape[0] == 0 or pred.shape[0] == 0:
-        return {"precision": 0.0, "recall": 0.0, "f1_score": 0.0, "mean_iou": 0.0}
+    if gt_masks.shape[0] == 0 or pred_masks.shape[0] == 0:
+        return {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1_score": 0.0,
+            "mean_iou": 0.0,
+            "matches": None,
+            "fp": None,
+            "fn": None,
+        }
 
-    iou_matrix = compute_iou_matrix(gt_spatial, pred)
+    iou_matrix = compute_iou_matrix(gt_masks, pred_masks)
     
     #Hungarian Algorithm to find best matches
     row_ind, col_ind = linear_sum_assignment(iou_matrix, maximize=True)
@@ -139,15 +147,33 @@ def evaluate_segmentation(
     #Filter matches by threshold
     matched_ious = iou_matrix[row_ind, col_ind]
     valid_matches = matched_ious > iou_threshold
+
+    tp_gt_indices = row_ind[valid_matches]
+    tp_pred_indices = col_ind[valid_matches]
     
     true_positives = np.sum(valid_matches)
+    if true_positives > 0:
+        valid_ious = matched_ious[valid_matches]
+        mean_iou = np.mean(valid_ious)
+        valid_dices = (2 * valid_ious) / (valid_ious + 1)
+        mean_dice = np.mean(valid_dices)
+
     mean_iou = np.mean(matched_ious[valid_matches]) if true_positives > 0 else 0.0
+
+    all_pred_indices = np.arange(len(pred_masks))
+    fp_indices = np.setdiff1d(all_pred_indices, tp_pred_indices)
+    
+    # False Negatives: GT masks that are NOT in the valid true positive set
+    all_gt_indices = np.arange(len(gt_masks))
+    fn_indices = np.setdiff1d(all_gt_indices, tp_gt_indices)
     
     #False Positives: Predictions that weren't matched to any GT or had low IoU
-    false_positives = pred.shape[0] - true_positives
+    false_positives = pred_masks.shape[0] - true_positives
     
     #False Negatives: GT masks that weren't matched to any Pred or had low IoU
-    false_negatives = gt_spatial.shape[0] - true_positives
+    false_negatives = gt_masks.shape[0] - true_positives
+
+    tp_pairs = list(zip(tp_gt_indices, tp_pred_indices))
     
     #Calculate Metrics
     precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0.0
@@ -157,24 +183,28 @@ def evaluate_segmentation(
         f1 = 2 * (precision * recall) / (precision + recall)
     else:
         f1 = 0.0
-        
-    return {
+    
+    metrics = {
         "precision": precision,
         "recall": recall,
         "f1_score": f1,
+        "ious": valid_ious.tolist(),
         "mean_iou": mean_iou,
-        "matches": int(true_positives),
+        "dices": valid_dices.tolist(),
+        "mean_dice": mean_dice,
+        "tp": int(true_positives),
         "fp": int(false_positives),
         "fn": int(false_negatives)
     }
+
+    return metrics, tp_pairs, fn_indices, fp_indices  
 
 
 def evaluate_model_performance(
     res,
     gt,
     save_filepath,
-    coverage_threshold: float = 0.6,
-    gt_match_threshold: float = 0.4,
+    iou_threshold: float = 0.5,
     gt_binary_threshold: float = 0.25,
     ):
     """
@@ -195,8 +225,7 @@ def evaluate_model_performance(
         gt_traces=gt["temporal"],
         pred_labels=res["labels"],
         save_filepath=save_filepath,
-        coverage_threshold=coverage_threshold,
-        gt_match_threshold=gt_match_threshold,
+        iou_threshold=iou_threshold,
         gt_binary_threshold=gt_binary_threshold,
         fps=gt["fps"],
     )

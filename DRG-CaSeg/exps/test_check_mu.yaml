@@ -112,8 +112,6 @@ preprocessing:
     function: data_utils.wrangler.norm_video
 
 analysis:
-  - id: "caiman_pilot"
-    function: analysis_utils.caiman.run_cnmfe
   - id: "ica_mu_0.2"
     function: analysis_utils.workflow.run_ica
     params:
