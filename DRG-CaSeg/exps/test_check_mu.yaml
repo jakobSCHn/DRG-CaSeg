@@ -6,21 +6,25 @@ dataset:
     params:
       fps: 30
       duration_s: 30
+      seed: 66
   - id: "syn_01"
     loader: data_utils.wrangler.load_drg_model_video
     params:
       fps: 30
       duration_s: 30
+      seed: 128
   - id: "syn_02"
     loader: data_utils.wrangler.load_drg_model_video
     params:
       fps: 30
       duration_s: 30
+      seed: 17
   - id: "syn_03"
     loader: data_utils.wrangler.load_drg_model_video
     params:
       fps: 30
       duration_s: 30
+      seed: 1524
   - id: "syn_04"
     loader: data_utils.wrangler.load_drg_model_video
     params:
@@ -110,20 +114,24 @@ preprocessing:
       max_intensity: 255
   - id: "normalization"
     function: data_utils.wrangler.norm_video
+  
 
 analysis:
-  - id: "ica_mu_0.2"
+  - id: "ica_mukamel_0.2"
     function: analysis_utils.workflow.run_ica
     params:
       mu: 0.2
-  - id: "ica_mu_0.5"
+      n_pcs: 50
+  - id: "ica_mukamel_0.5"
     function: analysis_utils.workflow.run_ica
     params:
       mu: 0.5
-  - id: "ica_mu_0.8"
+      n_pcs: 50
+  - id: "ica_mukamel_0.8"
     function: analysis_utils.workflow.run_ica
     params:
       mu: 0.8
+      n_pcs: 50
 
 visualization:
   - id: "ground_truth_plot"
@@ -132,8 +140,8 @@ visualization:
     function: data_utils.plot_adapters.plot_adapter_prediction_summary
 
 evaluation:
-  - id: "overlap_metric"
+  - id: "iou_score"
     function: analysis_utils.workflow.evaluate_model_performance
     params:
-      coverage_threshold: 0.6
+      iou_threshold: 0.5
   

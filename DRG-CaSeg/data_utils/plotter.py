@@ -645,10 +645,14 @@ def plot_summary_image(
                 )
                 txt.set_path_effects([pe.withStroke(linewidth=2, foreground="white")])
 
-    if md.get("scale", []):
-        bar_px = (100 / md["scale"])
-        scalebar = AnchoredSizeBar(ax_map.transData, bar_px, "100 \u03bcm", "lower right", pad=0.5, color="white", frameon=False, size_vertical=2)
-        ax_map.add_artist(scalebar)
+    if md is not None:
+        try:
+            md.get("scale", [])
+            bar_px = (100 / md["scale"])
+            scalebar = AnchoredSizeBar(ax_map.transData, bar_px, "100 \u03bcm", "lower right", pad=0.5, color="white", frameon=False, size_vertical=2)
+            ax_map.add_artist(scalebar)
+        except:
+            logger.warning("No scale found in metadata object!")
     ax_map.axis("off")
 
     # ---------------------------------------------------------
@@ -727,7 +731,6 @@ def plot_summary_image(
 def plot_segmentation_performance(
     gt_masks: np.ndarray,
     pred_masks: np.ndarray,
-    gt_binary: np.ndarray,
     tp_pairs: list,
     fn_indices: list,
     fp_indices: list,
@@ -745,7 +748,7 @@ def plot_segmentation_performance(
     # 1. Plot False Negatives (Missed GTs)
     # Using the passed gt_binary for consistency with the calculation
     for idx in fn_indices:
-        plt.contour(gt_binary[idx], colors="blue", linewidths=1.0, linestyles="dashed")
+        plt.contour(gt_masks[idx], colors="blue", linewidths=1.0, linestyles="dashed")
 
     # 2. Plot True Positives (Matched Pairs)
     for _, pred_idx in tp_pairs:

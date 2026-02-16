@@ -105,12 +105,6 @@ def _create_covmat(
 
     # --- Common DFoF normalization ---
     movm = np.mean(mov, axis=1) # Average over time (F0 for each pixel)
-    movm_zero = (movm == 0)
-    movm[movm_zero] = 1
-    
-    # Use broadcasting for (mov / movm) - 1
-    mov = mov / movm[:, np.newaxis] - 1
-    mov[movm_zero, :] = 0
 
     # --- Mode-specific calculations ---
     if mode == "temporal":

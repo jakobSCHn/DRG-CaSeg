@@ -205,7 +205,6 @@ def evaluate_model_performance(
     gt,
     save_filepath,
     iou_threshold: float = 0.5,
-    gt_binary_threshold: float = 0.25,
     ):
     """
     Wraps the model performance analysis to be compatible with 
@@ -226,7 +225,6 @@ def evaluate_model_performance(
         pred_labels=res["labels"],
         save_filepath=save_filepath,
         iou_threshold=iou_threshold,
-        gt_binary_threshold=gt_binary_threshold,
         fps=gt["fps"],
     )
 

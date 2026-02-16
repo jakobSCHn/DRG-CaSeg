@@ -203,7 +203,7 @@ class DRGtissueModel:
                 center_x=cell["x"],
                 sig_y_neuron=cell["size"],
                 sig_x_neuron=cell["size"] * cell["aspect_ratio"],
-                cutoff_percentage=15,
+                cutoff_percentage=25,
                 glia_thickness_um=cell["glia_thick"],
                 glia_variance_um=self.glia_variance_um,
                 angle_deg=cell["angle"],
@@ -352,8 +352,8 @@ class DRGtissueModel:
         )
         
         # Threshold the mask to create a sharp boundary of the neuron
-        threshold = (cutoff_percentage/100) * np.max(mask_neuron)
-        mask_neuron[mask_neuron < threshold] = 0
+        threshold_neuron = (cutoff_percentage/100) * np.max(mask_neuron)
+        mask_neuron[mask_neuron < threshold_neuron] = 0
 
         bool_mask_neuron = mask_neuron.astype(bool)
         # Extract the boundary of the neuron
@@ -373,6 +373,9 @@ class DRGtissueModel:
             thickness=glia_thickness_px,
             thickness_amplitude=glia_variance_px
         )
+        
+        threshold_glia = (cutoff_percentage/100) * np.max(mask_glia)
+        mask_glia[mask_glia < threshold_glia] = 0
         
         return mask_neuron, mask_glia
 
@@ -408,6 +411,14 @@ class DRGtissueModel:
         p_event_per_frame = spike_rate_hz / frame_rate_hz
 
         event_train = np.random.rand(num_frames) < p_event_per_frame
+        #Force at least one event, if the generator failed to produce any
+        if not np.any(event_train):
+            #Add a buffer to avoid putting the event into the very last frame
+            buffer = int(frame_rate_hz * tau_s) 
+            max_idx = max(1, num_frames - buffer)
+            
+            forced_idx = np.random.randint(0, max_idx)
+            event_train[forced_idx] = True
 
         # Calculate number of frames tau is covering 
         tau_frames = tau_s * frame_rate_hz
@@ -426,7 +437,7 @@ class DRGtissueModel:
 
         # Adjust brightness of the signal
         brightness_factor = np.clip(
-            np.random.normal(
+            np.random.uniform(
                 self.neuron_base_brightness*0.75,
                 self.neuron_base_brightness*1.25),
             0,
@@ -505,6 +516,14 @@ class DRGtissueModel:
                 break
             i += 1
 
+        if not np.any(event_train):
+            #Add a buffer to avoid putting the event into the very last frame
+            buffer = int(frame_rate_hz * tau_s) 
+            max_idx = max(1, num_frames - buffer)
+            
+            forced_idx = np.random.randint(0, max_idx)
+            event_train[forced_idx] = True
+    
         # Calculate number of frames tau is covering 
         tau_frames = tau_s * frame_rate_hz
         # Calcualte kernel length in frames (limit to 3x tau due to 95% rule)
@@ -522,7 +541,7 @@ class DRGtissueModel:
 
         # Adjust brightness of the signal
         brightness_factor = np.clip(
-            np.random.normal(
+            np.random.uniform(
                 self.glia_base_brightness*0.75,
                 self.glia_base_brightness*1.25),
             0,
@@ -784,4 +803,3 @@ class DRGtissueModel:
 
         # FORCE REBUILD of footprints with new coordinates
         self.build_image()
-    

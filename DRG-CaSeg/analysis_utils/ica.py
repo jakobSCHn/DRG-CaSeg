@@ -103,39 +103,55 @@ def ica_mukamel(
         
     CovEvals = CovEvals[PCuse]
     
-    # Center the data by removing the mean of each PC
-    mixedmean = np.mean(mixedsig, axis=1, keepdims=True)
-    mixedsig = mixedsig - mixedmean  # Broadcasting handles the subtraction
+    white_mat = np.diag(1.0 / np.sqrt(CovEvals))
+
+    # 2. Apply whitening to temporal and spatial components
+    # We apply this BEFORE the mu weighting
+    if mu > 0:
+        # mixedsig is (n_components, time) -> multiply on left
+        mixedsig_white = white_mat @ mixedsig 
+    
+    if mu < 1:
+        # mixedfilters is (pixels, n_components) -> multiply on right
+        # (Equivalent to transposing, multiplying, and transposing back)
+        mixedfilters_white = mixedfilters @ white_mat 
+
+    # --- FIX ENDS HERE ---
+
+    # Center the data (Mean removal)
+    # Note: If we whitened, the mean is likely near 0, but good to ensure.
+    if mu > 0:
+        mixedmean = np.mean(mixedsig_white, axis=1, keepdims=True)
+        mixedsig_white = mixedsig_white - mixedmean
 
     # 4. Create concatenated data for spatio-temporal ICA
-    nx = mixedfilters.shape[0]
-    nt = mixedsig.shape[1]
+    nx = mixedfilters.shape[0] if mu < 1 else 0
+    nt = mixedsig.shape[1] if mu > 0 else 0
     
     if mu == 1:
         # Pure temporal ICA
-        sig_use = mixedsig
+        sig_use = mixedsig_white
     elif mu == 0:
         # Pure spatial ICA
-        sig_use = mixedfilters.T
+        sig_use = mixedfilters_white.T
     else:
-        # WHITENING/NORMALIZATION IS MANDATORY HERE
-        # Center and scale to unit variance so mu actually works
-        f_part = mixedfilters.T - np.mean(mixedfilters.T, axis=1, keepdims=True)
-        f_part /= (np.std(f_part) + 1e-10)
+        # Spatio-temporal ICA
+        # Now that components are unit variance, we can just apply mu directly
+        # No need for global std division of f_part/s_part, 
+        # as they are already individually normalized.
         
-        s_part = mixedsig - np.mean(mixedsig, axis=1, keepdims=True)
-        s_part /= (np.std(s_part) + 1e-10)
+        f_part = mixedfilters_white.T
+        s_part = mixedsig_white
         
-        # Now mu acts on standardized data
+        # Concatenate with mu weighting
         sig_use = np.hstack([(1 - mu) * f_part, mu * s_part])
         
-        # Final re-standardization of the joint matrix
+        # Renormalize the joint vector to unit variance
         sig_use /= np.sqrt((1 - mu)**2 + mu**2)
-    
-    # Final whitening: Ensure sig_use has identity covariance
-    # This is crucial for symmetric orthogonalization to work
+
+    # Final check: sig_use should already be white (Cov ~ I), 
+    # but we can center it one last time to be safe.
     sig_use = sig_use - np.mean(sig_use, axis=1, keepdims=True)
-    sig_use = sig_use / np.std(sig_use)
 
     # 5. Perform ICA
     ica_A, numiter = _fpica_standardica(sig_use, nIC, w_init, termtol, maxrounds)

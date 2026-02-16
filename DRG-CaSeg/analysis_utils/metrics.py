@@ -54,7 +54,6 @@ def calculate_overlap_correlation(
     pred_labels: np.ndarray,
     save_filepath: str,
     iou_threshold: float,
-    gt_binary_threshold: float,
     fps: float,
     ) -> dict:
     """
@@ -79,11 +78,11 @@ def calculate_overlap_correlation(
     n_frames = n_frames_gt
 
     # Binarize Ground Truth as it's a Gaussian blob
-    gt_binary = (gt_masks > gt_binary_threshold).astype(np.float32)
+    gt_binary = (gt_masks > 0).astype(np.float32)
     
     results = {
         "spatial": {
-            "true_positives": 0, "false_negatives": 0, "false_positives": 0,
+            "tp": 0, "fn": 0, "fp": 0,
             "recall": 0.0, "precision": 0.0,
         },
         "temporal": {
@@ -127,7 +126,6 @@ def calculate_overlap_correlation(
     plotter.plot_segmentation_performance(
         gt_masks=gt_masks,
         pred_masks=pred_masks,
-        gt_binary=gt_binary,
         tp_pairs=tp_pairs,
         fn_indices=fn_indices,
         fp_indices=fp_indices,
