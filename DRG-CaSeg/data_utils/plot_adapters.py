@@ -48,7 +48,7 @@ def plot_adapter_gt_summary(
     dpi=300,
     ):
     
-    if gt:
+    if {"spatial", "temporal", "labels"} <= gt.keys():
         md = data.meta_data[0]
         if fps is None:
             fps = getattr(data, "fr", None) or 30

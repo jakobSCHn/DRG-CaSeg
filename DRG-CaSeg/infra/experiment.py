@@ -117,7 +117,7 @@ class Experiment:
 
                 metrics = results.get("analysis_stats", {})
 
-                if evaluation_methods and len(gt) > 0:
+                if evaluation_methods and {"spatial", "temporal"} <= gt.keys():
                     for eva in evaluation_methods:
                         logger.info(f"Evaluating with Evaluation ID: {eva["id"]}")
                         evaluator = configure_callable(
