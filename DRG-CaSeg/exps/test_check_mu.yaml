@@ -114,6 +114,8 @@ preprocessing:
       max_intensity: 255
   - id: "normalization"
     function: data_utils.wrangler.norm_video
+  - id: "motion_correction"
+    function: data_utils.wrangler.correct_motion
   
 
 analysis:
