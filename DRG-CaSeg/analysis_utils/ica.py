@@ -103,26 +103,8 @@ def ica_mukamel(
         
     CovEvals = CovEvals[PCuse]
     
-    white_mat = np.diag(1.0 / np.sqrt(CovEvals))
-
-    # 2. Apply whitening to temporal and spatial components
-    # We apply this BEFORE the mu weighting
-    if mu > 0:
-        # mixedsig is (n_components, time) -> multiply on left
-        mixedsig_white = white_mat @ mixedsig 
-    
-    if mu < 1:
-        # mixedfilters is (pixels, n_components) -> multiply on right
-        # (Equivalent to transposing, multiplying, and transposing back)
-        mixedfilters_white = mixedfilters @ white_mat 
-
-    # --- FIX ENDS HERE ---
-
-    # Center the data (Mean removal)
-    # Note: If we whitened, the mean is likely near 0, but good to ensure.
-    if mu > 0:
-        mixedmean = np.mean(mixedsig_white, axis=1, keepdims=True)
-        mixedsig_white = mixedsig_white - mixedmean
+    mixedmean = np.mean(mixedsig, axis=1, keepdims=True)
+    mixedsig -= mixedmean
 
     # 4. Create concatenated data for spatio-temporal ICA
     nx = mixedfilters.shape[0] if mu < 1 else 0
@@ -130,33 +112,22 @@ def ica_mukamel(
     
     if mu == 1:
         # Pure temporal ICA
-        sig_use = mixedsig_white
+        sig_use = mixedsig
     elif mu == 0:
         # Pure spatial ICA
-        sig_use = mixedfilters_white.T
-    else:
-        # Spatio-temporal ICA
-        # Now that components are unit variance, we can just apply mu directly
-        # No need for global std division of f_part/s_part, 
-        # as they are already individually normalized.
-        
-        f_part = mixedfilters_white.T
-        s_part = mixedsig_white
-        
+        sig_use = mixedfilters.T
+    else:        
         # Concatenate with mu weighting
-        sig_use = np.hstack([(1 - mu) * f_part, mu * s_part])
+        sig_use = np.hstack([(1 - mu) * mixedfilters.T, mu * mixedsig])
         
         # Renormalize the joint vector to unit variance
-        sig_use /= np.sqrt((1 - mu)**2 + mu**2)
+        sig_use /= np.sqrt(1 - 2*mu + 2*mu**2)
 
-    # Final check: sig_use should already be white (Cov ~ I), 
-    # but we can center it one last time to be safe.
-    sig_use = sig_use - np.mean(sig_use, axis=1, keepdims=True)
 
-    # 5. Perform ICA
+    #Perform ICA
     ica_A, numiter = _fpica_standardica(sig_use, nIC, w_init, termtol, maxrounds)
 
-    # 6. Post-processing and sorting
+    #Post-processing and sorting
     ica_sig = ica_A.T @ mixedsig
     
     # Calculate ica_filters
@@ -164,9 +135,7 @@ def ica_mukamel(
     diag_inv_sqrt_cov = np.diag(CovEvals**(-0.5))
     ica_filters = (mixedfilters @ diag_inv_sqrt_cov @ ica_A).T
     ica_filters.reshape((nIC, nx), order="F")
-    
-    # Normalization
-    ica_filters = ica_filters / (npix**2)
+    ica_filters = ica_filters / (npix**2) #normalization
     
     # Sort ICs according to skewness of the temporal component
     # We want the skewness for each row (IC)
@@ -213,7 +182,7 @@ def _fpica_standardica(x, nIC, w_init, termtol, maxrounds):
             # This is B = B @ (B.T @ B)^(-1/2)
             cov_b = b.T @ b
             eps = 1e-10 * np.eye(cov_b.shape[0]) #add a small epsilon for numerical stability
-            b = b @ np.real(inv(sqrtm(cov_b + eps)))
+            b = b @ np.real(sqrtm(inv(cov_b + eps)))
             
             # Test for termination condition.
             minAbsCos = np.min(np.abs(np.diag(b.T @ bOld)))

@@ -567,8 +567,6 @@ def plot_summary_image(
     est_col_width = 16 * 0.4 
     image_min_height = (est_col_width * img_aspect) + header_space
 
-    # We take the MAXIMUM of these two requirements
-    # We also enforce a global minimum of 8 inches to look "scientific"
     fig_height = max(8.0, trace_min_height, image_min_height)
 
     # Setup Figure
