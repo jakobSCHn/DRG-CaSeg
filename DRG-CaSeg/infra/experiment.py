@@ -54,7 +54,7 @@ class Experiment:
 
             data = payload["data"]
             md = data.meta_data[0]
-            gt = payload.get("gt", [])
+            gt = payload.get("gt", {})
             gt["fps"] = data.fr
 
             background_img = np.percentile(data, 98, axis=0)
