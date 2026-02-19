@@ -748,7 +748,7 @@ def plot_segmentation_performance(
     # 1. Plot False Negatives (Missed GTs)
     # Using the passed gt_binary for consistency with the calculation
     for idx in fn_indices:
-        plt.contour(gt_masks[idx], colors="blue", linewidths=1.0, linestyles="dashed")
+        plt.contour(gt_masks[idx], colors="cyan", linewidths=1.0)
 
     # 2. Plot True Positives (Matched Pairs)
     for _, pred_idx in tp_pairs:
@@ -765,7 +765,7 @@ def plot_segmentation_performance(
     
     legend_elements = [
         Patch(facecolor="lime", edgecolor="lime", label=f"TP: Match ({tp_count})"),
-        Patch(facecolor="blue", edgecolor="blue", linestyle="--", label=f"FN: Missed GT ({fn_count})"),
+        Patch(facecolor="cyan", edgecolor="cyan", label=f"FN: Missed GT ({fn_count})"),
         Patch(facecolor="red", edgecolor="red", label=f"FP: Noise ({fp_count})"),
     ]
     
@@ -781,7 +781,7 @@ def plot_segmentation_performance(
 
 
 @suppress_gui()
-def plot_temporal_comparison(
+def plot_temporal_performance(
     gt_traces: np.ndarray,
     pred_traces: np.ndarray,
     tp_pairs: list,
@@ -843,8 +843,8 @@ def plot_temporal_comparison(
         
         # Plotting
         time_axis = np.arange(len(t_gt)) / fps
-        ax.plot(time_axis, t_gt_norm, color=gt_color, linewidth=1.5, alpha=0.8, label="Ground Truth")
         ax.plot(time_axis, t_pred_norm, color=pred_color, linewidth=1.2, linestyle="--", label="Prediction")
+        ax.plot(time_axis, t_gt_norm, color=gt_color, linewidth=1.5, alpha=0.8, label="Ground Truth")
         
         # --- Custom Labelling Logic ---
         p_name = pred_labels[pred_idx] if pred_labels else pred_idx
@@ -876,7 +876,7 @@ def plot_temporal_comparison(
             
     axes[-1].set_xlabel("Time (s)", fontsize=11)
     
-    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.tight_layout(rect=[0, 0, 1, 0.98])
     plt.savefig(save_path / "temporal_performance.png", bbox_inches="tight")
     plt.close()
 
@@ -973,6 +973,81 @@ def plot_mask_comparison(
     full_path = Path(save_filepath) / file_ext
     fig.savefig(full_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
+
+@suppress_gui()
+def plot_spatial_performance(
+    gt_masks: np.ndarray,
+    pred_masks: np.ndarray,
+    tp_pairs: list[tuple],
+    save_path: Path,
+    ious: list,
+    dices: list,
+    title: str,
+    pred_labels: list,
+    ):
+
+    n_pairs = len(tp_pairs)
+    if n_pairs == 0:
+        raise ValueError("No matched pairs found to plot.")
+    ncols = 2
+    nrows = (n_pairs + ncols - 1) // ncols
+
+    #Extract image dimensions and check for compatibility
+    h_gt, w_gt = int(gt_masks.shape[1]), int(gt_masks.shape[2])
+    h_pred, w_pred = int(pred_masks.shape[1]), int(pred_masks.shape[2])
+    if h_gt != h_pred or w_gt != w_pred:
+        raise ValueError(
+            f"Dimension mismatch between ground truth and prediciton! "
+            f"Expected same height and width but received {(h_gt, w_gt)} "
+            f"for ground truth and {(h_pred, w_pred)} for the "
+            f"prediction mask instead."
+        )
+    h, w = h_gt, w_gt
+
+    fig = plt.figure(figsize=(14, nrows * 5.0), layout="compressed") 
+    fig.suptitle(title, fontsize=22, fontweight="bold")
+
+    grid = gridspec.GridSpec(nrows, ncols, figure=fig)
+
+    for i, (gt_idx, pred_idx) in enumerate(tp_pairs):
+        #Get the right axis to add the plot to in the grid
+        ax = fig.add_subplot(grid[i])
+
+        #Create an empty canvas to plot the masks on
+        ax.imshow(np.zeros((h, w)), cmap="gray", interpolation="nearest")
+
+
+        #Extract image dimensions and check for compatibility
+        ax.imshow(np.zeros((h, w)), cmap="gray", interpolation="nearest")
+        ax.contour(gt_masks[gt_idx], colors="cyan", linewidths=1.0)
+        ax.contour(pred_masks[pred_idx], colors="lime", linewidths=1.5)
+
+        legend_elements = [
+            Patch(facecolor="cyan", edgecolor="cyan", label=f"GT"),
+            Patch(facecolor="lime", edgecolor="lime", label=f"Pred"),
+        ]
+        
+        ax.legend(handles=legend_elements, loc="upper right")
+        
+        if ious and dices:
+            title_str = (f"Spatial Performance: Mask {i}\n"
+                        f"IoU: {ious[i]:.2f} | Dice: {dices[i]:.2f}")
+        elif ious:
+            title_str = (f"Spatial Performance: Mask {i}\n"
+                        f"IoU: {ious[i]:.2f}")
+        elif dices:
+            title_str = (f"Spatial Performance: Mask {i}\n"
+                        f"IoU: {dices[i]:.2f}")
+        else:
+            title_str = (f"Spatial Performance: Mask {i}\n"
+                        f"IoU: {dices[i]:.2f}")
+        ax.set_title(title_str)
+        ax.axis("off")
+
+    plt.savefig(save_path / "spatial_performance.png", bbox_inches="tight", dpi=300)
+    plt.close()
+
+
 
 
 def render_inference_video(

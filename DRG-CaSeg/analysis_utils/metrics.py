@@ -52,6 +52,7 @@ def calculate_overlap_correlation(
     pred_traces: np.ndarray, 
     gt_traces: np.ndarray,
     pred_labels: np.ndarray,
+    md: dict,
     save_filepath: str,
     iou_threshold: float,
     fps: float,
@@ -124,7 +125,7 @@ def calculate_overlap_correlation(
 
     # --- Plotting ---
     plotter.plot_segmentation_performance(
-        gt_masks=gt_masks,
+        gt_masks=gt_binary,
         pred_masks=pred_masks,
         tp_pairs=tp_pairs,
         fn_indices=fn_indices,
@@ -132,7 +133,7 @@ def calculate_overlap_correlation(
         results=results,
         save_path=save_filepath,
     )
-    plotter.plot_temporal_comparison(
+    plotter.plot_temporal_performance(
         gt_traces=gt_traces,
         pred_traces=pred_traces,
         tp_pairs=tp_pairs,
@@ -141,13 +142,23 @@ def calculate_overlap_correlation(
         title="Temporal Performance Comparison",
         pred_labels=pred_labels,
     )
+    plotter.plot_spatial_performance(
+        gt_masks=gt_binary,
+        pred_masks=pred_masks,
+        tp_pairs=tp_pairs,
+        save_path=save_filepath,
+        ious=results["spatial"].get("ious", []),
+        dices=results["spatial"].get("dices", []),
+        title="Spatial Classification Performance",
+        pred_labels=pred_labels,
+    )
     adapt.plot_adapter_gt_overlay(
         gt_masks=gt_masks,
         gt_traces=gt_traces,
         pred_masks=pred_masks,
         pred_traces=pred_traces,
         tp_pairs=tp_pairs,
-        md={},
+        md=md,
         save_path=save_filepath,
         fps=fps,
         n_frames=n_frames,

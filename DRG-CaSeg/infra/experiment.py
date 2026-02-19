@@ -53,7 +53,7 @@ class Experiment:
             payload = loader()
 
             data = payload["data"]
-            md = payload.get("meta", [])
+            md = data.meta_data[0]
             gt = payload.get("gt", [])
             gt["fps"] = data.fr
 
@@ -130,7 +130,7 @@ class Experiment:
                             context=runtime_context,
                         )
 
-                        metrics.update(evaluator(res=results, gt=gt))
+                        metrics.update(evaluator(res=results, gt=gt, md=md))
                         save_dict_to_yaml(metrics, save_path=save_path / "metrics.yaml")
 
                 else:

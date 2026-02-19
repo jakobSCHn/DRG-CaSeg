@@ -203,6 +203,7 @@ def evaluate_segmentation(
 def evaluate_model_performance(
     res,
     gt,
+    md, 
     save_filepath,
     iou_threshold: float = 0.5,
     ):
@@ -223,6 +224,7 @@ def evaluate_model_performance(
         pred_traces=res["traces"],
         gt_traces=gt["temporal"],
         pred_labels=res["labels"],
+        md=md, 
         save_filepath=save_filepath,
         iou_threshold=iou_threshold,
         fps=gt["fps"],
