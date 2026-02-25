@@ -97,7 +97,7 @@ def generate_gaussian_ring(
 
 def generate_gaussian_noise(
     video: np.ndarray,  
-    snr: float = 4.0,
+    snr: float,
     ) -> np.ndarray:
     """Adds Gaussian white noise to a video array based on a target Signal-to-Noise Ratio (SNR).
 

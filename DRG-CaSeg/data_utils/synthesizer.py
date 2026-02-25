@@ -444,7 +444,7 @@ class DRGtissueModel:
             255
         )
         full_trace *= brightness_factor
-        full_trace += brightness_factor
+        full_trace += self.neuron_base_brightness
         return full_trace[:num_frames]
 
 

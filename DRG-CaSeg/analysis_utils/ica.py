@@ -22,12 +22,12 @@ def ica_mukamel(
     mixedsig,
     mixedfilters,
     CovEvals,
+    maxrounds: int,
     PCuse=None,
     mu=None, 
     nIC=None,
     w_init=None,
     termtol: float = 1e-6,
-    maxrounds: int = 100
     ):
     """
     Performs ICA with a standard set of parameters, including skewness as the
@@ -90,16 +90,17 @@ def ica_mukamel(
     npix = pixw * pixh
     
     # Select PCs
-    if mu > 0:
+    if mu > 0 or mixedsig.size > 0:
         mixedsig = mixedsig[PCuse, :]
         
-    if mu < 1:
+    if mu < 1 or mixedfilters.size > 0:
         # Reshape mixedfilters, using Fortran ('F') order to match MATLAB's
         # column-major reshape.
         # Original shape (pixw, pixh, N) -> select PCuse on 3rd dim
         temp_filters = mixedfilters[:, :, PCuse] # Shape (pixw, pixh, len(PCuse))
         # Reshape to (npix, len(PCuse))
         mixedfilters = temp_filters.reshape((npix, len(PCuse)), order="F")
+
         
     CovEvals = CovEvals[PCuse]
     
@@ -107,8 +108,8 @@ def ica_mukamel(
     mixedsig -= mixedmean
 
     # 4. Create concatenated data for spatio-temporal ICA
-    nx = mixedfilters.shape[0] if mu < 1 else 0
-    nt = mixedsig.shape[1] if mu > 0 else 0
+    nx = mixedfilters.shape[0]
+    nt = mixedsig.shape[1]
     
     if mu == 1:
         # Pure temporal ICA
@@ -286,63 +287,55 @@ def extract_rois_and_traces(
         component_img = spatial_filters[i]
         component_trace = temporal_signals[i]
 
-        k = kurtosis(component_img.ravel()) 
+        component_img -= component_img.mean()
+        component_img = median_filter(component_img, size=3)
         
-        if k > kurtosis_thresh:
-            logger.info(f"  [Component {i:2d}]: SELECTED (Kurtosis = {k:.2f})")
-
-            component_img -= component_img.mean()
-            component_img = median_filter(component_img, size=3)
-            
-
-            trace_skew = skew(component_trace)
-            if trace_skew > 0:
-                seed_point = np.unravel_index(np.argmax(component_img), component_img.shape)
-                peak = component_img[seed_point]
-                tol = 0.5 * np.abs(peak)
-                binary_mask = flood(component_img, seed_point, tolerance=tol)
-            else:
-                seed_point = np.unravel_index(np.argmin(component_img), component_img.shape)
-                peak = component_img[seed_point]
-                tol = 0.5 * np.abs(peak)
-                binary_mask = flood(component_img, seed_point, tolerance=tol)
-
-            labeled_array, num_features = label(binary_mask)
-            
-            if num_features == 0:
-                continue
-
-            blob_labels = np.arange(1, num_features + 1)
-            blob_sizes = ndi_sum(binary_mask, labeled_array, index=blob_labels)
-            
-            good_blob_labels = blob_labels[(blob_sizes >= min_size) & 
-                                           (blob_sizes <= max_size)]
-            
-            if good_blob_labels.size == 0:
-                continue
-            component_mask = np.isin(labeled_array, good_blob_labels)
-            labeled_rois, num_rois = label(component_mask)
-
-            bin_masks.append(binary_mask)
-            cl_masks.append(component_mask)
-
-            logger.info(f"  [Component {i:2d}]: Found {good_blob_labels.size} good blobs.")
-            used_components.append(i)
-
-            use_suffix = num_rois > 1
-            
-            # Add each individual blob as its own ROI
-            counter += 1
-            for j in range(1, num_rois + 1):
-                roi_mask = (labeled_rois == j)
-                final_roi_masks.append(roi_mask)
-                final_roi_traces.append(-component_trace) # All blobs from this component get the same trace
-
-                suffix = chr(96 + j) if use_suffix else ""
-                roi_labels.append(f"{counter}{suffix}")
-                
+        trace_skew = skew(component_trace)
+        if trace_skew > 0:
+            seed_point = np.unravel_index(np.argmax(component_img), component_img.shape)
+            peak = component_img[seed_point]
+            tol = 0.5 * np.abs(peak)
+            binary_mask = flood(component_img, seed_point, tolerance=tol)
         else:
-            logger.info(f"  [Component {i:2d}]: REJECTED (Kurtosis = {k:.2f})")
+            seed_point = np.unravel_index(np.argmin(component_img), component_img.shape)
+            peak = component_img[seed_point]
+            tol = 0.5 * np.abs(peak)
+            binary_mask = flood(component_img, seed_point, tolerance=tol)
+
+        labeled_array, num_features = label(binary_mask)
+        
+        if num_features == 0:
+            continue
+
+        blob_labels = np.arange(1, num_features + 1)
+        blob_sizes = ndi_sum(binary_mask, labeled_array, index=blob_labels)
+        
+        good_blob_labels = blob_labels[(blob_sizes >= min_size) & 
+                                        (blob_sizes <= max_size)]
+        
+        if good_blob_labels.size == 0:
+            continue
+        component_mask = np.isin(labeled_array, good_blob_labels)
+        labeled_rois, num_rois = label(component_mask)
+
+        bin_masks.append(binary_mask)
+        cl_masks.append(component_mask)
+
+        logger.info(f"  [Component {i:2d}]: Found {good_blob_labels.size} good blobs.")
+        used_components.append(i)
+
+        use_suffix = num_rois > 1
+        
+        # Add each individual blob as its own ROI
+        counter += 1
+        for j in range(1, num_rois + 1):
+            roi_mask = (labeled_rois == j)
+            final_roi_masks.append(roi_mask)
+            final_roi_traces.append(-component_trace) # All blobs from this component get the same trace
+
+            suffix = chr(96 + j) if use_suffix else ""
+            roi_labels.append(f"{counter}{suffix}")
+                
             
     logger.info(f"Extraction complete: Found {len(final_roi_masks)} ROIs.")
     

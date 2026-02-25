@@ -17,7 +17,7 @@ def run_ica(
     save_filepath: Path,
     n_pcs: int | tuple[int, int] = 20,
     mu=0.5,
-    maxrounds=200,
+    maxrounds=500,
     kurtosis_thres=5.0,
     z_thres=3,
     minsize=25,
