@@ -7,6 +7,7 @@ from scipy.ndimage import binary_erosion, affine_transform
 from pathlib import Path
 
 import data_utils.ops as ops
+from data_utils.plotter import plot_image
 
 
 import logging
@@ -585,6 +586,11 @@ class DRGtissueModel:
         capillary_network = self.generate_capillary_network()
         static_background = landscape * capillary_network
         self.background = static_background
+        plot_image(
+            image=static_background,
+            save_loc="static_background_image",
+            cmap="gray"
+        )
     
         return static_background
 

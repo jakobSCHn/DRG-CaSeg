@@ -14,7 +14,6 @@ def extract_cnmfe_results(
     model: cnmf.CNMF,
     dims: tuple,          
     ):
-    #TODO: extract dims in run and pass it to this function
     traces = model.estimates.C
     A_sparse = model.estimates.A
 
@@ -32,7 +31,7 @@ def get_default_params(
     ):
 
     #motion correction parameters
-    pw_rigid = False         # flag for performing piecewise-rigid motion correction (otherwise just rigid)
+    pw_rigid = True          # flag for performing piecewise-rigid motion correction (otherwise just rigid)
     gSig_filt = (6, 6)       # sigma for high pass spatial filter applied before motion correction, used in 1p data
     max_shifts = (5, 5)      # maximum allowed rigid shift
     strides = (48, 48)       # start a new patch for pw-rigid motion correction every x pixels
@@ -41,21 +40,21 @@ def get_default_params(
     border_nan = "copy"      # replicate values along the boundaries
 
     # parameters for source extraction and deconvolution
-    decay_time = 10     #length of a typical transient in seconds
+    decay_time = 45     #length of a typical transient in seconds
     p = 1               #order of the autoregressive system
     K = None            #upper bound on number of components per patch, in general None for CNMFE
-    gSig = np.array([6, 6])  #expected half-width of neurons in pixels 
+    gSig = np.array([7, 7])  #expected half-width of neurons in pixels 
     gSiz = 2*gSig + 1     #half-width of bounding box created around neurons during initialization
     merge_thr = .9      #merging threshold, max correlation allowed
-    rf = 40             #half-size of the patches in pixels. e.g., if rf=40, patches are 80x80
+    rf = 80             #half-size of the patches in pixels. e.g., if rf=40, patches are 80x80
     stride_cnmf = 15    #amount of overlap between the patches in pixels 
-    tsub = 2            #downsampling factor in time for initialization, increase if you have memory problems
+    tsub = 1            #downsampling factor in time for initialization, increase if you have memory problems
     ssub = 1            #downsampling factor in space for initialization, increase if you have memory problems
     gnb = 0             #number of background components (rank) if positive, set to 0 for CNMFE
     low_rank_background = None  #None leaves background of each patch intact (use True if gnb>0)
     nb_patch = 0        #number of background components (rank) per patch (0 for CNMFE)
     min_corr = .8       #min peak value from correlation image
-    min_pnr = 10        #min peak to noise ration from PNR image
+    min_pnr = 5         #min peak to noise ration from PNR image
     ssub_B = 2          #additional downsampling factor in space for background (increase to 2 if slow)
     ring_size_factor = 1.4  #radius of ring is gSiz*ring_size_factor
     bord_px = 0         #should be zero if the motion correction border_nan is set to copy (default

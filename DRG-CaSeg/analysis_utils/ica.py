@@ -175,7 +175,7 @@ def _fpica_standardica(x, nIC, w_init, termtol, maxrounds):
         while (iternum < maxrounds) and ((1 - minAbsCos) > termtol):
             iternum += 1
             
-            # Symmetric orthogonalization.
+            # Fixed Point update<i
             # B = (X * ((X' * B) .^ 2)) / numSamples;
             b = (x @ ((x.T @ b) ** 2)) / numSamples
             
@@ -247,8 +247,6 @@ def extract_rois_and_traces(
     temporal_signals, 
     min_size, 
     max_size,
-    kurtosis_thresh,
-    z_thresh,
     ):
     """
     Selects neuron-like ICA components and extracts a list of individual 

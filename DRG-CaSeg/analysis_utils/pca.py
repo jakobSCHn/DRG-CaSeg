@@ -103,7 +103,6 @@ def _create_covmat(
     mov = mov.transpose((1, 2, 0))
     mov = mov.reshape((npix, nt), order="F")
 
-    # --- Common DFoF normalization ---
     movm = np.mean(mov, axis=1) # Average over time (F0 for each pixel)
 
     # --- Mode-specific calculations ---

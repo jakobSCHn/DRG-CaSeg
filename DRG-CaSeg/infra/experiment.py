@@ -96,6 +96,13 @@ class Experiment:
                 )
                 results = analyzer(data)
 
+                if ana["export_matrices"]:
+                    np.savez_compressed(
+                        save_path / "raw_matrices.npz",
+                        masks=results["masks"],
+                        traces=results["traces"],
+                    )
+
 
                 if visualization:
                     for vis in visualization:

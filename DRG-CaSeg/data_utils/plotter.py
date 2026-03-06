@@ -40,17 +40,17 @@ def suppress_gui():
         matplotlib.use(original_backend, force=True)
 
 
-@suppress_gui()
 def plot_image(
     image: np.ndarray,
     save_loc: str | Path,
     title: str = "Image",
     frame_id: int | None = None,
     cmap: str = "Greens",
-    cbar_label: str = "Pixel Intensity",
+    cbar_label: str = "Brightness",
     ):
 
     fig, ax = plt.subplots(figsize=(12,10))
+    ax.imshow(image, cmap=cmap, vmin=0, vmax=255, interpolation="bilinear")
     img = ax.imshow(image, cmap=cmap)
     ax.set_title(
         f"{title}; Frame: {frame_id}" if frame_id else title,
@@ -59,7 +59,7 @@ def plot_image(
     )
     ax.axis("off")
 
-    fig.colorbar(img, ax=ax, orientation="vertical", label=cbar_label)
+    plt.show()
     fig.savefig(
         str(save_loc / f"{title}; Frame: {frame_id}" if frame_id else title),
         bbox_inches="tight",
@@ -1046,6 +1046,45 @@ def plot_spatial_performance(
     plt.close()
 
 
+
+def visualize_vessel_generation(landscape, vessel_area):
+    # 1. Calculate the threshold exactly like your function
+    threshold_value = np.quantile(landscape, vessel_area)
+    
+    # 2. Setup coordinates
+    h, w = landscape.shape
+    x = np.arange(0, w)
+    y = np.arange(0, h)
+    X, Y = np.meshgrid(x, y)
+
+    fig = plt.figure(figsize=(12, 8))
+    ax = fig.add_subplot(111, projection="3d")
+
+    # 3. Plot the Perlin Landscape
+    # We use a colormap that looks like "valleys" (where vessels will be)
+    surf = ax.plot_surface(X, Y, landscape, cmap="Greens", 
+                           linewidth=0, antialiased=True, alpha=0.6, label="Perlin Noise Landscape")
+
+    # 4. Add the "Cutoff Plane"
+    # Create a flat surface at the height of threshold_value
+    plane_z = np.full_like(landscape, threshold_value)
+    ax.plot_surface(X, Y, plane_z, color="black", alpha=0.4, lw=0.5, rstride=20, cstride=20,
+                   label="Threshold Plane")
+    ax.contour(X, Y, landscape, levels=[threshold_value], 
+               zdir="z", offset=threshold_value, 
+               colors="red", linewidths=3)
+
+    # 5. Styling
+    ax.set_title(f"Vascular Architecture Generation\n"
+                 f"(vessel area = {vessel_area*100}%)",
+                 fontweight="bold",
+    )
+    ax.set_zlabel("Brightness (uint8)")
+    ax.view_init(elev=30, azim=45) # Adjust angle to see the "slicing"
+    
+    plt.legend()
+    plt.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
+    plt.show()
 
 
 def render_inference_video(
