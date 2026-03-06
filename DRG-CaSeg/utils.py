@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 def seed_everything(
     seed: int,
-    ):
+    ) -> None:
     random.seed(seed)
     np.random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
@@ -22,7 +22,7 @@ def seed_everything(
 def save_dict_to_yaml(
     data: dict,
     save_path: Path,
-    ):
+    ) -> None:
     """
     Saves a dictionary to a YAML file, handling pathlib.Path objects
     and converting common Numpy types to native Python types.
@@ -51,3 +51,19 @@ def save_dict_to_yaml(
 
     with open(save_path, "w") as f:
         yaml.dump(sanitized_data, f, sort_keys=False, default_flow_style=False)
+
+
+def check_filepaths(
+    data_cfgs: list
+    ) -> None:
+
+    valid_dicts = filter(lambda dictionary: "params" in dictionary and "filename" in dictionary["params"], data_cfgs)
+    found_paths = list(map(lambda dictionary: dictionary["params"]["filename"], valid_dicts))
+
+    for path_string in found_paths:
+        if not Path(path_string).is_file():
+            raise FileNotFoundError(
+                f"Missing required data file: {path_string}. "
+                f"Check for typos and proper referencing in file names "
+                f"before running an experiment!"
+            )

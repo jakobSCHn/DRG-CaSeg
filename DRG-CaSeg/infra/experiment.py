@@ -3,7 +3,7 @@ import attrs
 import numpy as np
 
 from datetime import datetime
-from utils import save_dict_to_yaml
+from utils import save_dict_to_yaml, check_filepaths
 from infra.infra_utils import configure_callable, setup_experiment_folder
 
 import logging
@@ -41,9 +41,15 @@ class Experiment:
         visualization = self.config.get("visualization", [])
         evaluation_methods = self.config.get("evaluation", [])
 
+        #Safety check to see whether all filenames exist that have been referenced
+        check_filepaths(data_cfgs)
+
+        #Load the data samples for the experiment and analyze them one
+        #after another to reduce RAM needs
         for data_cfg in data_cfgs:
-            #Load the data for the experiment
+
             logger.info(f"Loading dataset ID: {data_cfg["id"]}")
+
             loader = configure_callable(
                 id=data_cfg["id"],
                 import_path=data_cfg["loader"],
