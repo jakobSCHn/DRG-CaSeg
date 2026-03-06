@@ -85,13 +85,16 @@ preprocessing:
 analysis:
   - id: "caiman_default"
     function: analysis_utils.caiman.run_cnmfe
+    export_matrices: True
   - id: "ica_mukamel_n_40"
     function: analysis_utils.workflow.run_ica
+    export_matrices: True
     params:
       mu: 0.5
       n_pcs: 40
   - id: "ica_mukamel_n_120"
     function: analysis_utils.workflow.run_ica
+    export_matrices: True
     params:
       mu: 0.5
       n_pcs: 120

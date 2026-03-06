@@ -349,7 +349,9 @@ def get_default_params_motion():
 
 def correct_motion(
     mov: cm.movie,
-    cluster = None,
+    cluster_factory = None,
+    backend = None,
+    n_processes = None,
     **params,
     ):
     unique_id = uuid.uuid4().hex
@@ -371,6 +373,11 @@ def correct_motion(
     if params is not None:
         parameters.change_params(params_dict=params)
 
+    cluster = None
+    if cluster_factory is not None and backend == "multiprocessing":
+        logger.info("Starting Multiprocessing Pool")
+        cluster = cluster_factory()
+
     try:
         corrector = MotionCorrect(fname=fname_path, dview=cluster, **parameters.get_group("motion"))
         corrector.motion_correct(save_movie=False)
@@ -379,7 +386,12 @@ def correct_motion(
         return corrected_mov
     
     finally:
-        #Since we created the file, we are responsible for deleting it
+        #Clean up multiprocessing ressources
+        if cluster is not None:
+            logger.info("Closing Multiprocessing Pool")
+            cluster.close()
+            cluster.join()
+        #Clean up temporary memmap file
         if os.path.exists(fname_path):
             try:
                 os.remove(fname_path)

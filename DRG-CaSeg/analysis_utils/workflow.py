@@ -18,8 +18,6 @@ def run_ica(
     n_pcs: int | tuple[int, int] = 20,
     mu=0.5,
     maxrounds=500,
-    kurtosis_thres=5.0,
-    z_thres=3,
     minsize=25,
     maxsize=25000,
     ):
@@ -71,8 +69,6 @@ def run_ica(
         temporal_signals=ica_sig,
         min_size=minsize,
         max_size=maxsize,
-        kurtosis_thresh=kurtosis_thres,
-        z_thresh=z_thres,
     )
 
     plot_spatial_filters(

@@ -102,7 +102,7 @@ class Experiment:
                 )
                 results = analyzer(data)
 
-                if ana["export_matrices"]:
+                if ana.get("export_matrices", False):
                     np.savez_compressed(
                         save_path / "raw_matrices.npz",
                         masks=results["masks"],

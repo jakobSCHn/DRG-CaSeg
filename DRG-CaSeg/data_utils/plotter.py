@@ -39,7 +39,7 @@ def suppress_gui():
         #restore the original backend (e.g., 'Qt5Agg')
         matplotlib.use(original_backend, force=True)
 
-
+@suppress_gui()
 def plot_image(
     image: np.ndarray,
     save_loc: str | Path,
@@ -69,6 +69,7 @@ def plot_image(
     return fig, ax
 
 
+@suppress_gui()
 def plot_function(
     time,
     signal,
@@ -110,6 +111,7 @@ def plot_function(
     plt.savefig(filename)
 
 
+@suppress_gui()
 def plot_temporal_patterns(
     ica_signals: np.ndarray,
     fs: float | None = None,
@@ -147,6 +149,7 @@ def plot_temporal_patterns(
     plt.savefig(filename)
 
 
+@suppress_gui()
 def plot_spatial_patterns(
     ica_filters: np.ndarray,
     n_components: int | None = None,
@@ -194,6 +197,7 @@ def plot_spatial_patterns(
     plt.savefig(filename)
 
 
+@suppress_gui()
 def plot_contours(
     masks,
     labels,
@@ -292,6 +296,7 @@ def plot_contours(
     logger.info("Contour Image saved successfully.")
 
 
+@suppress_gui()
 def plot_contour_and_trace(
     roi_masks, 
     roi_traces, 
@@ -367,7 +372,10 @@ def plot_contour_and_trace(
 
         # --- Plot Trace (on ax_trace) ---
         # Z-score the trace: (x - mean) / std
-        trace_z = zscore(trace)
+        if np.std(trace) < 1e-6:
+            trace_z = np.zeros_like(trace)
+        else:
+            trace_z = zscore(trace)
         
         # Create a vertical offset for stacking
         # We plot the first trace at 0, the next at 5, the next at 10, etc.
@@ -452,6 +460,7 @@ def plot_spatial_filters(
     fig.savefig(save_filepath / file_ext, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
     logger.info("Display of spatial components saved successfully.")
+
 
 @suppress_gui()
 def plot_ica_components(
@@ -550,7 +559,14 @@ def plot_summary_image(
     gt_labels = None,
     ):
 
-    num_rois = len(roi_masks)
+    #Saftey check to limit plotting to a feasable number of masks
+    max_rois = 50
+    num_rois = min(len(roi_masks), max_rois)
+    roi_masks = roi_masks[:num_rois]
+    roi_traces = roi_traces[:num_rois]
+    roi_labels = roi_labels[:num_rois]
+
+
     img_h, img_w = background_img.shape[:2]
     img_aspect = img_h / img_w
 
@@ -670,14 +686,14 @@ def plot_summary_image(
             axes_traces.append(ax_trace)
         
         raw_trace = roi_traces[i]
-        if np.std(raw_trace) == 0:
+        if np.std(raw_trace) < 1e-6:
             trace_z = np.zeros_like(raw_trace)
         else:
             if skew(raw_trace) < 0: raw_trace = -raw_trace
             trace_z = zscore(raw_trace)
         if gt_traces is not None:
             raw_trace = gt_traces[i]
-            if np.std(raw_trace) == 0:
+            if np.std(raw_trace) < 1e-6:
                 trace_z_gt = np.zeros_like(raw_trace)
             else:
                 if skew(raw_trace) < 0: raw_trace = -raw_trace
@@ -876,7 +892,7 @@ def plot_temporal_performance(
     
     plt.tight_layout(rect=[0, 0, 1, 0.98])
     plt.savefig(save_path / "temporal_performance.png", bbox_inches="tight")
-    plt.close()
+    plt.close(fig)
 
 
 @suppress_gui()
@@ -972,6 +988,7 @@ def plot_mask_comparison(
     fig.savefig(full_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
 
+
 @suppress_gui()
 def plot_spatial_performance(
     gt_masks: np.ndarray,
@@ -1043,10 +1060,10 @@ def plot_spatial_performance(
         ax.axis("off")
 
     plt.savefig(save_path / "spatial_performance.png", bbox_inches="tight", dpi=300)
-    plt.close()
+    plt.close(fig)
 
 
-
+@suppress_gui()
 def visualize_vessel_generation(landscape, vessel_area):
     # 1. Calculate the threshold exactly like your function
     threshold_value = np.quantile(landscape, vessel_area)
@@ -1087,6 +1104,7 @@ def visualize_vessel_generation(landscape, vessel_area):
     plt.show()
 
 
+@suppress_gui()
 def render_inference_video(
     roi_masks, 
     roi_traces, 
@@ -1119,7 +1137,10 @@ def render_inference_video(
     ax_trace.set_title("Temporal Traces (Z-scored & Stacked)")
     
     for i in range(num_rois):
-        trace_z = zscore(roi_traces[i])
+        if np.std(roi_traces[i]) < 1e-6:
+            trace_z = np.zeros_like(roi_traces[i])
+        else:
+            trace_z = zscore(roi_traces[i])
         offset = i * trace_stack_offset_std
         ax_trace.plot(trace_z + offset, color=colors(i), linewidth=0.5)
 

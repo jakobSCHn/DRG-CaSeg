@@ -17,6 +17,49 @@ def setup_cluster(
     n_processes: int = None,
     ignore_preexisting: bool = False,
     maxtasksperchild: int = None
+):
+
+    if n_processes is None:
+        n_processes = max(int(psutil.cpu_count() - 1), 1) 
+
+    if backend == "multiprocessing":
+        if len(multiprocessing.active_children()) > 0:
+            if ignore_preexisting:
+                logger.warning("Found an existing multiprocessing pool. "
+                               "This is often indicative of an already-running CaImAn cluster. "
+                               "You have configured the cluster setup to not raise an exception.")
+            else:
+                raise Exception("A cluster is already running. Terminate with dview.terminate() if you want to restart.")
+        
+        # DELAY THE START: Wrap the Pool creation in a function
+        def start_pool():
+            return multiprocessing.Pool(
+                n_processes,
+                maxtasksperchild=maxtasksperchild
+            )
+        
+        cluster_factory = start_pool
+
+    elif backend == "single":
+        # Returns None when called to maintain consistency
+        cluster_factory = lambda: None 
+        n_processes = 1
+
+    else:
+        raise Exception("Unknown Backend")
+
+    return {
+        "cluster_factory": cluster_factory,
+        "n_processes": n_processes,
+        "backend": backend
+    }
+
+"""
+def setup_cluster(
+    backend: str = "multiprocessing",
+    n_processes: int = None,
+    ignore_preexisting: bool = False,
+    maxtasksperchild: int = None
     ):
 
     if n_processes is None:
@@ -32,7 +75,11 @@ def setup_cluster(
                 raise Exception(
                     "A cluster is already running. Terminate with dview.terminate() if you want to restart.")
         
-        dview = multiprocessing.Pool(n_processes, maxtasksperchild=maxtasksperchild)
+        dview = multiprocessing.Pool(
+            n_processes,
+            maxtasksperchild=maxtasksperchild,
+            initializer=init_worker
+        )
 
     elif backend == "single":
         dview = None
@@ -45,6 +92,7 @@ def setup_cluster(
         "cluster": dview,
         "n_processes": n_processes
     }
+"""
 
 
 def get_object_from_path(

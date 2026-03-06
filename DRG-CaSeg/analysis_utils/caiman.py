@@ -121,7 +121,8 @@ def get_default_params(
 def run_cnmfe(
     mov: cm.movie,
     temp_path = None,
-    cluster = None,
+    cluster_factory = None,
+    backend = None,
     n_processes: int = 2,
     **params,   
     ):
@@ -138,10 +139,15 @@ def run_cnmfe(
     if params is not None:
         parameters.change_params(params_dict=params)
     try:
+        cluster = None
         fname_new = mov.save(base_path, order="C")
             
         Yr, dims, T = cm.load_memmap(fname_new)
         images = Yr.T.reshape((T,) + dims, order="F")
+
+        if cluster_factory is not None and backend == "multiprocessing":
+            logger.info("Starting Multiprocessing Pool")
+            cluster = cluster_factory()
 
         cnmfe_model = cnmf.CNMF(
             n_processes=n_processes,
@@ -164,6 +170,11 @@ def run_cnmfe(
 
 
     finally:
+        #clean the cluster variables
+        if cluster is not None:
+            logger.info("Closing Multiprocessing Pool")
+            cluster.close()
+            cluster.join()
         #delete variables to unlock the memmap file
         if "Yr" in locals(): del Yr
         if "images" in locals(): del images

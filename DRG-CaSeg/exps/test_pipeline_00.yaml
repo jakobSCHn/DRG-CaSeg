@@ -2,50 +2,40 @@ experiment_name: "test_pipeline_00"
 
 dataset:
   - id: "cut_test_vid"
-    loader: data_utils.wrangler.load_video
+    loader: data_utils.wrangler.load_czi_to_caiman
     params:
       filename: "/home/jaschneider/projects/DRG-CaSeg/data/test_00_3rdB2.czi"
-  - id: "test_syn"
-    loader: data_utils.wrangler.load_drg_model_video
-    params:
-      seed: 42
-      fps: 33.33
-      duration_s: 7.5
-      num_small_neurons: 0
-      num_large_neurons: 7
-  - id: "test_syn_shift"
-    loader: data_utils.wrangler.load_drg_model_video
-    params:
-      seed: 42
-      fps: 33.33
-      duration_s: 7.5
-      num_small_neurons: 0
-      num_large_neurons: 7
-      perturbation:
-        target_indices: [0, 1, 4]
-        angle_deg: [0, 90, 180]
-        shift_px: [50, 50, 50]
-
 
 preprocessing:
   - id: "scaling"
     function: data_utils.wrangler.scale_video
     params:
-      max_intensity: 200 
+      min_intensity: 0
+      max_intensity: 255 
+  - id: "normalization"
+    function: data_utils.wrangler.norm_video
+  - id: "motion_correction"
+    function: data_utils.wrangler.correct_motion
 
 analysis:
-  - id: "ica_mukamel"
+  - id: "caiman_default"
+    function: analysis_utils.caiman.run_cnmfe
+    export_matrices: True
+  - id: "ica_mukamel_n_40"
+    function: analysis_utils.workflow.run_ica
+    export_matrices: True
+    params:
+      mu: 0.5
+      n_pcs: 40
+  - id: "ica_mukamel_n_120"
     function: analysis_utils.workflow.run_ica
     params:
-      n_pcs: 20
-  - id: "ica_mukamel_wo_1st_pc"
-    function: analysis_utils.workflow.run_ica
-    params:
-      n_pcs: [1, 20]
+      mu: 0.5
+      n_pcs: 120
+  
 
-evaluation:
-  - id: "IoU"
-    function: analysis_utils.workflow.evaluate_segmentation
-    params:
-      iou_threshold: 0.5
+visualization:
+  - id: "prediction_plot"
+    function: data_utils.plot_adapters.plot_adapter_prediction_summary
+  
   
