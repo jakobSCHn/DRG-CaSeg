@@ -103,6 +103,7 @@ class Experiment:
                 results = analyzer(data)
 
                 if ana.get("export_matrices", False):
+                    logger.info("Exporting data in numpy matrix format")
                     np.savez_compressed(
                         save_path / "raw_matrices.npz",
                         masks=results["masks"],

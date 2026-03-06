@@ -56,19 +56,19 @@ dataset:
   - id: "real_4th_A3"
     loader: data_utils.wrangler.load_czi_to_caiman
     params:
-      filename: "/home/jschneider/projects/DRG-CaSeg/data/4th A3.czi"
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/4th_A3.czi"
   - id: "real_4th_B3"
     loader: data_utils.wrangler.load_czi_to_caiman
     params:
-      filename: "/home/jschneider/projects/DRG-CaSeg/data/4th B3.czi"
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/4th_B3.czi"
   - id: "real_5th_A3"
     loader: data_utils.wrangler.load_czi_to_caiman
     params:
-      filename: "/home/jschneider/projects/DRG-CaSeg/data/5th A3.czi"
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/5th_A3.czi"
   - id: "real_5th_B3"
     loader: data_utils.wrangler.load_czi_to_caiman
     params:
-      filename: "/home/jschneider/projects/DRG-CaSeg/data/5th B3.czi"
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/5th_B3.czi"
   
 
 preprocessing:
@@ -80,7 +80,7 @@ preprocessing:
   - id: "normalization"
     function: data_utils.wrangler.norm_video
   - id: "motion_correction"
-    function: data_utils.wrangler.motion_correct_video
+    function: data_utils.wrangler.correct_motion
 
 analysis:
   - id: "caiman_default"
