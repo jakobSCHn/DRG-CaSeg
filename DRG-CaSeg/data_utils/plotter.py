@@ -560,7 +560,7 @@ def plot_summary_image(
     ):
 
     #Saftey check to limit plotting to a feasable number of masks
-    max_rois = 50
+    max_rois = 100
     num_rois = min(len(roi_masks), max_rois)
     roi_masks = roi_masks[:num_rois]
     roi_traces = roi_traces[:num_rois]
