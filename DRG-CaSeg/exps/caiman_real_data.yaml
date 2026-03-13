@@ -94,7 +94,11 @@ analysis:
     params:
       decay_time: 75
   
-  
+postprocessing:
+  - id: "discard_background"
+    function: postprocessing.processing_adapters.filter_background_masks
+  - id: "filter_traces"
+    function: postprocessing.processing_adapters.bandpass_filter_traces
 
 visualization:
   - id: "prediction_plot"

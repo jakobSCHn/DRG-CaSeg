@@ -69,7 +69,6 @@ dataset:
     loader: data_utils.wrangler.load_czi_to_caiman
     params:
       filename: "/home/jschneider/projects/DRG-CaSeg/data/5th_B3.czi"
-  
 
 preprocessing:
   - id: "scaling"
@@ -98,7 +97,12 @@ analysis:
     params:
       mu: 0.5
       n_pcs: 120
-  
+
+postprocessing:
+  - id: "discard_background"
+    function: postprocessing.processing_adapters.filter_background_masks
+  - id: "filter_traces"
+    function: postprocessing.processing_adapters.bandpass_filter_traces
 
 visualization:
   - id: "prediction_plot"
