@@ -18,20 +18,22 @@ preprocessing:
     function: data_utils.wrangler.correct_motion
 
 analysis:
-  - id: "caiman_default"
+  - id: "caiman_10s"
     function: analysis_utils.caiman.run_cnmfe
     export_matrices: True
-  - id: "ica_mukamel_n_40"
-    function: analysis_utils.workflow.run_ica
+    params:
+      decay_time: 10
+  - id: "caiman_75s"
+    function: analysis_utils.caiman.run_cnmfe
     export_matrices: True
     params:
-      mu: 0.5
-      n_pcs: 40
-  - id: "ica_mukamel_n_120"
-    function: analysis_utils.workflow.run_ica
-    params:
-      mu: 0.5
-      n_pcs: 120
+      decay_time: 75
+
+postprocessing:
+  - id: "discard_background"
+    function: postprocessing.processing_adapters.filter_background_masks
+  - id: "filter_traces"
+    function: postprocessing.processing_adapters.bandpass_filter_traces
   
 
 visualization:

@@ -4,3 +4,5 @@ __pycache__/
 results/
 data/
 temp/
+*.h5
+*.hdf5

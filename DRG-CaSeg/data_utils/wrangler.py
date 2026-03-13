@@ -236,6 +236,8 @@ def load_drg_model_video(
 
     #Return standardized dataset structure
     dataset_id = params.get("id", f"synthetic_{seed}")
+
+    background_img = np.percentile(mov, 98, axis=0)
     
     return {
         "id": dataset_id,
@@ -247,7 +249,8 @@ def load_drg_model_video(
         },
         "meta": {
             "cell_metadata": model.cell_metadata
-        }
+        },
+        "background_img": background_img
     }
 
 
@@ -317,9 +320,12 @@ def load_czi_to_caiman(
         meta_data=meta_data
     )
 
+    background_img = np.percentile(movie_obj, 98, axis=0)
+
     return {
         "id": id,
         "data": movie_obj,
+        "background_img": background_img,
     }
 
 

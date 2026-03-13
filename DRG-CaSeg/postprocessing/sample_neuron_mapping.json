@@ -1,0 +1,5 @@
+{
+    "sensor_matrix_A": {"start": 0, "stop": 50},
+    "image_matrix_B": {"start": 10, "stop": 25},
+    "audio_matrix_C": {"start": null, "stop": 100}
+}

@@ -138,6 +138,7 @@ def run_cnmfe(
     parameters = get_default_params()
     if params is not None:
         parameters.change_params(params_dict=params)
+        logger.info("Parameters successfully updated!")
     try:
         cluster = None
         fname_new = mov.save(base_path, order="C")

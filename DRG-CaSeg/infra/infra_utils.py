@@ -7,9 +7,15 @@ import shutil
 import multiprocessing
 
 from pathlib import Path
+from enum import Enum, auto
 
 import logging
 logger = logging.getLogger(__name__)
+
+
+class DataStage(Enum):
+    RAW = auto()
+    POST_PROCESSED = auto()
 
 
 def setup_cluster(
@@ -17,7 +23,7 @@ def setup_cluster(
     n_processes: int = None,
     ignore_preexisting: bool = False,
     maxtasksperchild: int = None
-):
+    ):
 
     if n_processes is None:
         n_processes = max(int(psutil.cpu_count() - 1), 1) 
@@ -53,46 +59,6 @@ def setup_cluster(
         "n_processes": n_processes,
         "backend": backend
     }
-
-"""
-def setup_cluster(
-    backend: str = "multiprocessing",
-    n_processes: int = None,
-    ignore_preexisting: bool = False,
-    maxtasksperchild: int = None
-    ):
-
-    if n_processes is None:
-        n_processes = max(int(psutil.cpu_count() - 1), 1) 
-
-    if backend == "multiprocessing":
-        if len(multiprocessing.active_children()) > 0:
-            if ignore_preexisting:
-                logger.warning("Found an existing multiprocessing pool. "
-                               "This is often indicative of an already-running CaImAn cluster. "
-                               "You have configured the cluster setup to not raise an exception.")
-            else:
-                raise Exception(
-                    "A cluster is already running. Terminate with dview.terminate() if you want to restart.")
-        
-        dview = multiprocessing.Pool(
-            n_processes,
-            maxtasksperchild=maxtasksperchild,
-            initializer=init_worker
-        )
-
-    elif backend == "single":
-        dview = None
-        n_processes = 1
-
-    else:
-        raise Exception("Unknown Backend")
-
-    return {
-        "cluster": dview,
-        "n_processes": n_processes
-    }
-"""
 
 
 def get_object_from_path(
@@ -133,6 +99,8 @@ def configure_callable(
             if k in sig.parameters
         }
         dropped_keys = set(params.keys()) - set(valid_params.keys())
+
+        dropped_keys.discard("id") #Specifically remove "id", it shouldn't trigger the warning
         if dropped_keys:
             logger.warning(f"Dropped params for {import_path}: {dropped_keys}")
 

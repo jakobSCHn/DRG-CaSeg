@@ -55,8 +55,7 @@ def main():
 
 
 
-    #Start a cluster with a pool of worker processes
-    
+    #Setup a cluster with a pool of worker processes
     runtime_context = setup_cluster(
         backend=backend,
         n_processes=n_processes,
