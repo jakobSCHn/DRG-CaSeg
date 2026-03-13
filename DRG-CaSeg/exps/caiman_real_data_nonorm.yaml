@@ -1,0 +1,105 @@
+experiment_name: "caiman_real_data_nonorm"
+
+dataset:
+  - id: "real_1st_A2"
+    loader: data_utils.wrangler.load_czi_to_caiman
+    params:
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/1st A2.czi"
+  - id: "real_1st_A3"
+    loader: data_utils.wrangler.load_czi_to_caiman
+    params:
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/1st A3.czi"
+  - id: "real_1st_B1"
+    loader: data_utils.wrangler.load_czi_to_caiman
+    params:
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/1st B1.czi"
+  - id: "real_1st_B2"
+    loader: data_utils.wrangler.load_czi_to_caiman
+    params:
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/1st B2.czi"
+  - id: "real_1st_B3"
+    loader: data_utils.wrangler.load_czi_to_caiman
+    params:
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/1st B3.czi"
+  - id: "real_2nd_A1"
+    loader: data_utils.wrangler.load_czi_to_caiman
+    params:
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/2nd A1.czi"
+  - id: "real_2nd_A2"
+    loader: data_utils.wrangler.load_czi_to_caiman
+    params:
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/2nd A2.czi"
+  - id: "real_2nd_B1"
+    loader: data_utils.wrangler.load_czi_to_caiman
+    params:
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/2nd B1.czi"
+  - id: "real_2nd_B2"
+    loader: data_utils.wrangler.load_czi_to_caiman
+    params:
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/2nd B2.czi"
+  - id: "real_3rd_A1"
+    loader: data_utils.wrangler.load_czi_to_caiman
+    params:
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/3rd A1.czi"
+  - id: "real_3rd_A2_start_KCl"
+    loader: data_utils.wrangler.load_czi_to_caiman
+    params:
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/3rd A2_startKCl.czi"
+  - id: "real_3rd_B1"
+    loader: data_utils.wrangler.load_czi_to_caiman
+    params:
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/3rd B1.czi"
+  - id: "real_3rd_B2"
+    loader: data_utils.wrangler.load_czi_to_caiman
+    params:
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/3rd B2.czi"
+  - id: "real_4th_A3"
+    loader: data_utils.wrangler.load_czi_to_caiman
+    params:
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/4th_A3.czi"
+  - id: "real_4th_B3"
+    loader: data_utils.wrangler.load_czi_to_caiman
+    params:
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/4th_B3.czi"
+  - id: "real_5th_A3"
+    loader: data_utils.wrangler.load_czi_to_caiman
+    params:
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/5th_A3.czi"
+  - id: "real_5th_B3"
+    loader: data_utils.wrangler.load_czi_to_caiman
+    params:
+      filename: "/home/jschneider/projects/DRG-CaSeg/data/5th_B3.czi"
+  
+
+preprocessing:
+  - id: "scaling"
+    function: data_utils.wrangler.scale_video
+    params:
+      min_intensity: 0
+      max_intensity: 255 
+  - id: "motion_correction"
+    function: data_utils.wrangler.correct_motion
+
+analysis:
+  - id: "caiman_10s"
+    function: analysis_utils.caiman.run_cnmfe
+    export_matrices: True
+    params:
+      decay_time: 10
+  - id: "caiman_45s"
+    function: analysis_utils.caiman.run_cnmfe
+    export_matrices: True
+    params:
+      decay_time: 45
+  - id: "caiman_75s"
+    function: analysis_utils.caiman.run_cnmfe
+    export_matrices: True
+    params:
+      decay_time: 75
+  
+  
+
+visualization:
+  - id: "prediction_plot"
+    function: data_utils.plot_adapters.plot_adapter_prediction_summary
+  
