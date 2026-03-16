@@ -484,7 +484,7 @@ def plot_ica_components(
         raise ValueError("No filters found to plot.")
 
     ncols = 2 if n_filters > 1 else 1
-    nrows_groups = math.ceil(n_filters / ncols)
+    nrows_groups = max(1, math.ceil(n_filters / ncols))
 
     # Figure setup
     fig = plt.figure(figsize=(ncols * 6, nrows_groups * 4.5)) 
@@ -590,7 +590,7 @@ def plot_summary_image(
     
     # GridSpec
     # wspace=0.15, hspace=0.5 (generous vertical space)
-    gs = gridspec.GridSpec(num_rois, 2, figure=fig, width_ratios=[1, 1.5], wspace=0.15, hspace=0.5)
+    gs = gridspec.GridSpec(max(1, num_rois), 2, figure=fig, width_ratios=[1, 1.5], wspace=0.15, hspace=0.5)
     
     # Title positioning
     # We anchor the title to the top edge minus a small margin relative to figure height
@@ -926,7 +926,7 @@ def plot_mask_comparison(
     fig.suptitle(title, fontsize=22, fontweight="bold", y=0.98)
 
     # hspace set to 0.6 to provide distinct gaps for the row headers
-    outer_grid = gridspec.GridSpec(nrows, ncols, figure=fig, hspace=0.6, wspace=0.25)
+    outer_grid = gridspec.GridSpec(max(1, nrows), ncols, figure=fig, hspace=0.6, wspace=0.25)
 
     n_frames = pred_traces.shape[1]
     time_axis = np.arange(n_frames) / fps
@@ -1022,7 +1022,7 @@ def plot_spatial_performance(
     fig = plt.figure(figsize=(14, nrows * 5.0), layout="compressed") 
     fig.suptitle(title, fontsize=22, fontweight="bold")
 
-    grid = gridspec.GridSpec(nrows, ncols, figure=fig)
+    grid = gridspec.GridSpec(max(1, nrows), ncols, figure=fig)
 
     for i, (gt_idx, pred_idx) in enumerate(tp_pairs):
         #Get the right axis to add the plot to in the grid
