@@ -7,58 +7,6 @@ from pathlib import Path
 from skimage import morphology as morph
 
 
-
-def extract_and_store_slices(
-    data_directory: str,
-    mapping_file: str,
-    output_file: str,
-    target_filename: str = "data.npz"
-) -> None:
-    """
-    Iterates through sample directories, extracts matrix slices from .npz files 
-    based on a JSON mapping, and stores the hierarchy in an HDF5 file.
-    """
-    # 1. Load the external mapping
-    with open(mapping_file, "r") as file:
-        slice_mapping = json.load(file)
-
-    root_path = Path(data_directory)
-
-    # 2. Open the HDF5 file in write mode
-    with h5py.File(output_file, "w") as hdf5_out:
-        
-        # 3. Recursively find all target .npz files
-        for npz_path in root_path.rglob(target_filename):
-            
-            # Extract sample ID from the parent folder's name
-            sample_id = npz_path.parent.name
-            
-            # Create a group for this sample in the HDF5 file
-            if sample_id not in hdf5_out:
-                sample_group = hdf5_out.create_group(sample_id)
-            else:
-                sample_group = hdf5_out[sample_id]
-
-            # 4. Open the .npz file and process matrices
-            with np.load(npz_path) as npz_data:
-                for matrix_name, indices in slice_mapping.items():
-                    
-                    if matrix_name in npz_data:
-                        start = indices.get("start")
-                        stop = indices.get("stop")
-                        
-                        # Extract the slice (handles None values gracefully)
-                        matrix_slice = npz_data[matrix_name][start:stop]
-                        
-                        # Save the variable-length slice as a dataset under the sample group
-                        sample_group.create_dataset(
-                            matrix_name,
-                            data=matrix_slice
-                        )
-                    else:
-                        print(f"Warning: Matrix \"{matrix_name}\" not found in \"{sample_id}\"")
-
-
 def mask_background(
     masks: np.ndarray,
     background_img: np.ndarray,

@@ -9,10 +9,13 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run batch experiments.")
+    parser = argparse.ArgumentParser(
+        description="Run batch Calcium Imaging analysis experiments."
+    )
     
     # allow passing multiple files or folders
     parser.add_argument(
+        "-c",
         "--configs", 
         nargs="+",
         required=True,
@@ -21,6 +24,7 @@ def main():
     
     # Allow controlling parallelism
     parser.add_argument(
+        "-w",
         "--workers", 
         type=int, 
         default=1, 
@@ -54,12 +58,11 @@ def main():
     from infra.experiment import Experiment
 
 
-
     #Setup a cluster with a pool of worker processes
     runtime_context = setup_cluster(
         backend=backend,
         n_processes=n_processes,
-        ignore_preexisting=False
+        ignore_preexisting=False,
     )
 
     SEED = int(os.getenv("GLOBAL_SEED", 42))
@@ -75,7 +78,6 @@ def main():
         exp.run(runtime_context)
 
     
-
 
 if __name__ == "__main__":
     main()

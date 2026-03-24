@@ -1,0 +1,18 @@
+Calcium_czi_name,IF_czi_name,Group,DRG_donor,IVD_donor,Sample_ID,Comments
+1st_A2.czi,1stA2_CytDD2-TD1_float_lowpri.czi,Cytokine,2,1,A2__Cyt_DD2_TD1,"Capsaicin added 100s, KCl_1 added 200s, KCl_2 added 300s. Total 500s"
+1st_A3.czi,1stA3_CytDD1-TD2-1_float.czi,Cytokine,1,2,A3__Cyt_DD1_TD2_1,"Capsaicin added 100s, KCl_1 added 200s, KCl_2 added 300s. Total 500s"
+1st_B1.czi,1stB1_CytDD1-TD3-2.czi,Cytokine,1,3,B1__Cyt_DD1_TD3_2,"Capsaicin added 100s, KCl_1 added 200s, KCl_2 added 300s. Total 500s"
+1st_B2.czi,1stB2_ConDD1-TD3-2_float.czi,Control,1,3,B2__Con_DD1_TD3_2,"Capsaicin added 100s, KCl_1 added 200s, KCl_2 added 300s. Total 500s"
+1st_B3.czi,1stB3_ConDD1-TD2-1_float_one.czi and 1stB3_ConDD1-TD2-1_float_two.czi,Control,1,2,B3__Con_DD1_TD2_1,"Capsaicin added 100s, KCl_1 added 200s, KCl_2 added 300s. Total 500s"
+2nd_A1.czi,2ndA1_CytDD1-TD3-1.czi,Cytokine,1,3,A1__Cyt_DD1_TD3_1,"Capsaicin added 100s, KCl_1 added 200s, KCl_2 added 300s. Total 500s"
+2nd_A2.czi,Lost,Control,1,3,A2__Con_DD1_TD3_1,"Capsaicin added 100s, KCl_1 added 200s, KCl_2 added 300s. Total 500s"
+2nd_B1.czi,2ndB1_ConDD2-TD2.czi,Control,2,2,B1__Con_DD2_TD2,"Capsaicin added 100s, KCl_1 added 200s, KCl_2 added 300s. Total 500s"
+2nd_B2.czi,2ndB2_CytDD2-TD2.czi,Cytokine,2,2,B2__Cyt_DD2_TD2,"Capsaicin added 100s, KCl_1 added 200s, KCl_2 added 300s. Total 500s"
+3rd_A1.czi,3rdA1_CytDD1-TD1.czi,Cytokine,1,1,A1__Cyt_DD1_TD1,"Capsaicin added 100s, KCl_1 added 200s, KCl_2 added 300s. Total 500s"
+3rd_A2.czi,Lost,Control,1,1,A2__Con_DD1_TD1,Find the explant again and performed KCl stimulation
+3rd_B1.czi,3rdB1_CytDD1-TD2-2.czi,Cytokine,1,2,B1__Cyt_DD1_TD2_2,"Capsaicin added 100s, KCl_1 added 200s, KCl_2 added 300s. Total 500s"
+3rd_B2.czi,3rdB2_ConDD1-TD2-2.czi,Control,1,2,B2__Con_DD1_TD2_2,"Capsaicin added 100s, KCl_1 added 200s, KCl_2 added 300s. Total 500s"
+4th_A3.czi,4thA1_CytDD2-TD3-2.czi,Cytokine,2,3,A1__Cyt_DD2_TD3_2,"Capsaicin added 100s, KCl_1 added 200s, KCl_2 added 300s. Total 500s"
+4th_B3.czi,4thB1_ConDD2-TD3-2.czi,Control,2,3,B1__Con_DD2_TD3_2,"Capsaicin added 100s, KCl_1 added 200s, KCl_2 added 300s. Total 500s"
+5th_A3.czi,5thA1_ConDD2-TD3-1.czi,Control,2,3,A1__Con_DD2_TD3_1,"Capsaicin added 100s, KCl_1 added 200s, KCl_2 added 300s. Total 500s"
+5th_B3.czi,5thB1_CytDD2-TD3-1.czi,Cytokine,2,3,B1__Cyt_DD2_TD3_1,"Capsaicin added 100s, KCl_1 added 200s, KCl_2 added 300s. Total 500s"

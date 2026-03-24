@@ -1,0 +1,31 @@
+matrix_oi:
+  "traces"
+
+features:
+  - id: "peaks"
+    function: bio_analysis.features.calculate_peak_features
+    params:
+      debug_plot: True
+      n_debug_samples: 8
+      peak_snr: 7.5
+      distance: 30.0
+      crop: 50.0
+
+plotters:
+  - id: "peak_height_plot"
+    function: bio_analysis.plotters.plot_peak_heights_per_stimulus
+  - id: "boxplot"
+    function: bio_analysis.plotters.plot_feature_boxplot
+    params:
+      feature_column: "peak_count"
+      title: "Peak Count Distribution"
+  - id: "barchart"
+    function: bio_analysis.plotters.plot_discrete_peak_counts
+    params:
+      feature_column: "peak_count"
+      title: "Proportion of active Neurons with multiple Peaks"
+  - id: "barchart_all"
+    function: bio_analysis.plotters.plot_all_peak_counts
+    params:
+      feature_column: "peak_count"
+      title: "Proportion of active Neurons with multiple Peaks"

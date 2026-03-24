@@ -142,6 +142,7 @@ class Experiment:
                 save_path / "postprocessed_matrices.npz",
                 masks=results_post["masks"],
                 traces=results_post["traces"],
+                sampling_frequency=fr,
             )
 
         return results_post
