@@ -1,31 +1,46 @@
 matrix_oi:
   "traces"
 
+stimuli_regions:
+  capsaicin_100nM: [99.0, 190.0]
+  KCl_50mM: [199.0, 290.0]
+  KCl_75mM: [299.0, 390.0]
+
 features:
   - id: "peaks"
     function: bio_analysis.features.calculate_peak_features
     params:
-      debug_plot: True
+      debug_plot: False
       n_debug_samples: 8
-      peak_snr: 7.5
+      peak_snr: 2.5
       distance: 30.0
       crop: 50.0
+  - id: "correlations"
+    function: bio_analysis.features.calculate_sample_correlation
 
 plotters:
+  - id: "plot_max_gradient"
+    function: bio_analysis.plotters.plot_max_gradient
+  - id: "peak_jittering_peak"
+    function: bio_analysis.plotters.plot_peak_jitter
+    params:
+      time_point: "peak"
+  - id: "peak_jittering"
+    function: bio_analysis.plotters.plot_peak_jitter
+    params:
+      time_point: "gradient"
+  - id: "lantency_peak"
+    function: bio_analysis.plotters.plot_latency
+    params:
+      time_point: "peak"
+  - id: "latency_gradient"
+    function: bio_analysis.plotters.plot_latency
+    params:
+      time_point: "gradient"
   - id: "peak_height_plot"
     function: bio_analysis.plotters.plot_peak_heights_per_stimulus
-  - id: "boxplot"
-    function: bio_analysis.plotters.plot_feature_boxplot
-    params:
-      feature_column: "peak_count"
-      title: "Peak Count Distribution"
-  - id: "barchart"
-    function: bio_analysis.plotters.plot_discrete_peak_counts
-    params:
-      feature_column: "peak_count"
-      title: "Proportion of active Neurons with multiple Peaks"
-  - id: "barchart_all"
-    function: bio_analysis.plotters.plot_all_peak_counts
-    params:
-      feature_column: "peak_count"
-      title: "Proportion of active Neurons with multiple Peaks"
+  - id: "peak_count_dist"
+    function: bio_analysis.plotters.plot_responder_proportions
+  - id: "correlation_plot"
+    function: bio_analysis.plotters.plot_sample_correlations
+ 

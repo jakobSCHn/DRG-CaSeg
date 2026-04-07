@@ -82,6 +82,23 @@ def run_bioanalysis(
         matrix_oi = config["matrix_oi"]
         feature_configs = config["features"]
         plotting_configs = config["plotters"]
+
+        #perform saftey type check to ensure stimulis regions can
+        #be loaded as a list of tuples of the proper type
+        raw_windows = config["stimuli_regions"]
+        if not isinstance(raw_windows, dict):
+            raise TypeError(f"Expected 'stimuli_regions' to be a dict, got {type(raw_windows)}.")
+
+        stimuli_windows = {}
+        for name, window in raw_windows.items():
+            if not isinstance(window, list) or len(window) != 2:
+                raise TypeError(f"Each item in 'stimuli_regions' must be a pair of numbers defining start- "
+                                f"and endpoint of time trace containing the stimulus response, got {window}.")
+            if not all(isinstance(t, (int, float)) for t in window):
+                raise TypeError(f"Timepoints in 'stimuli_regions' must be numbers, got {window}.")
+            
+            stimuli_windows[name] = tuple(window)
+
     except KeyError as e:
         raise KeyError(f"Missing mandatory key in YAML config file: {e}")
 
@@ -103,6 +120,7 @@ def run_bioanalysis(
         analysis_pattern=args.analysis_pattern,
         processing_functions=feature_functions,
         matrix_oi=matrix_oi,
+        stimuli_regions=stimuli_windows,
     )
 
     #Configure the functions for plotting extracted features
@@ -117,6 +135,7 @@ def run_bioanalysis(
         )
         plotting_functions.append(func)
 
+
     prep.plot_results(
         data=feature_df,
         plotting_functions=plotting_functions,
@@ -124,8 +143,10 @@ def run_bioanalysis(
 
     print(Hello)
 
-    
+    feature_save_path = (Path(__file__).parent / "trace_features.csv").resolve()
+    feature_df.to_csv(feature_save_path)
 
+    
 if __name__ == "__main__":
     pipeline_args = parse_yaml_config()
     run_bioanalysis(pipeline_args)

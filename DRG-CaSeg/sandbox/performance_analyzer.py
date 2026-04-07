@@ -128,6 +128,8 @@ def plot_metric_stability(
     Calculates and plots the cumulative mean of a given metric to visualize 
     stability over an increasing sample size.
     """
+    save_path = Path(save_path)
+    print(data.columns)
     if metric_name not in data.columns:
         print(f"Cannot plot stability: The column '{metric_name}' is missing.")
         return
@@ -164,10 +166,10 @@ def plot_metric_stability(
     ax.set_ylim(bottom=0.0, top=1.0)
     ax.set_xlabel("Number of Samples Included", fontweight="bold")
     ax.set_ylabel(f"Cumulative Mean of {y_label if y_label else metric_name}", fontweight="bold")
-    ax.set_title(f"Stability of Mean {y_label if y_label else metric_name} across Sample Size", pad=15, fontsize=18, fontweight="bold")
+    ax.set_title(f"Stability of {y_label if y_label else metric_name} across Sample Size", pad=15, fontsize=18, fontweight="bold")
     
     # Format the legend 
-    ax.legend(title="\u03bc", loc="best", frameon=True, facecolor="white", framealpha=1.0)
+    ax.legend(title="n", loc="best", frameon=True, facecolor="white", framealpha=1.0)
     
     # A bit of path manipulation so it works in batches
     prefix = save_path.name
@@ -253,8 +255,9 @@ def main():
         save_path=f"/home/jaschneider/projects/DRG-CaSeg/thesis_plots/{folder_name}",
     )
 
-    fullstop = "Fullstop"
+
 
 
 if __name__ == "__main__":
     main()
+    stop = "here"

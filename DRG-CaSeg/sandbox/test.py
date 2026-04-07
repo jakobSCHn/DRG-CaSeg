@@ -1,23 +1,33 @@
-import os
-import logging
+from tkinter import filedialog
+import tkinter as tk
+from pathlib import Path
 
-import config
-from utils import seed_everything
+def debug_file_tree():
+    root = tk.Tk()
+    root.withdraw()
+    
+    target_dir = filedialog.askdirectory(title="Select the Parent Directory")
+    if not target_dir:
+        print("No directory selected. Exiting.")
+        return
 
-config.setup_logging()
-logger = logging.getLogger(__name__)
+    base_path = Path(target_dir)
+    
+    # "Set up a clean table header for the terminal"
+    print(f"\n{'Extracted [-3:]':<15} | {'Folder Name':<25} | {'Full File Path'}")
+    print("-" * 100)
 
-import caiman as cm
-from data_utils.wrangler import load_czi_to_caiman
-
-
+    for yaml_file in base_path.rglob("metrics.y*ml"):
+        folder_name = yaml_file.parent.name
+        extracted_val = folder_name[-3:]
+        
+        # "Flag suspicious values that don't look like your 0.0 to 1.0 floats"
+        if "." not in extracted_val:
+            flag = " <--- SUSPICIOUS"
+        else:
+            flag = ""
+            
+        print(f"{extracted_val:<15} | {folder_name:<25} | {yaml_file}{flag}")
 
 if __name__ == "__main__":
-
-    SEED = int(os.getenv("GLOBAL_SEED", 42))
-    seed_everything(SEED)
-
-    p = "/home/jaschneider/projects/DRG-CaSeg/data/test_00_3rdB2.czi"
-    movie = load_czi_to_caiman(p)
-    print(type(movie))
-    print("Hello")
+    debug_file_tree()

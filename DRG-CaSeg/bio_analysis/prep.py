@@ -73,7 +73,8 @@ def process_files(
     target_string: str,
     analysis_pattern,
     processing_functions: list,
-    matrix_oi: str, 
+    matrix_oi: str,
+    stimuli_regions: list[tuple],
     ):
     """
     The main coordinator function that ties the workflow together.
@@ -112,7 +113,11 @@ def process_files(
             }
 
             for func in processing_functions:
-                batch_results = func(time_traces, fs=fs.item()) 
+                batch_results = func(
+                    data=time_traces,
+                    fs=fs.item(),
+                    stimuli_regions=stimuli_regions,
+                ) 
                 file_features.update(batch_results)
 
             #Create a DataFrame for this specific file and store it
@@ -130,7 +135,7 @@ def process_files(
         group_dict = dict(zip(metadata_df["sample_id"], metadata_df["Group"]))
         global_df["group"] = global_df["sample_id"].map(group_dict)
 
-        global_df.set_index("trace_id", inplace=True)
+        global_df.set_index(["sample_id", "trace_id"], inplace=True)
     else:
         global_df = pd.DataFrame()
 
