@@ -131,6 +131,7 @@ def calculate_overlap_correlation(
         fn_indices=fn_indices,
         fp_indices=fp_indices,
         results=results,
+        md=md,
         save_path=save_filepath,
     )
     plotter.plot_temporal_performance(
@@ -149,6 +150,7 @@ def calculate_overlap_correlation(
         save_path=save_filepath,
         ious=results["spatial"].get("ious", []),
         dices=results["spatial"].get("dices", []),
+        md=md,
         title="Spatial Classification Performance",
         pred_labels=pred_labels,
     )
@@ -169,6 +171,7 @@ def calculate_overlap_correlation(
         pred_masks=pred_masks,
         pred_traces=pred_traces,
         tp_pairs=tp_pairs,
+        md=md,
         save_filepath=save_filepath,
         fps=fps,
         file_ext="single_mask_comparison.png"

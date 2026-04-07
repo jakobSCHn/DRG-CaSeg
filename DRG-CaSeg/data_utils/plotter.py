@@ -554,67 +554,50 @@ def plot_summary_image(
     fps: int | float, 
     cmap: str,
     dpi: int,
-    title: str = "Spatial Layout & Activity Summary",
+    title: str = "",
     gt_traces = None,
     gt_labels = None,
-    ):
-
-    #Saftey check to limit plotting to a feasable number of masks
+):
+    # Safety check to limit plotting to a feasible number of traces
+    # Note: Spatial masks are NOT limited, only the temporal traces
     max_rois = 100
-    num_rois = min(len(roi_masks), max_rois)
-    roi_masks = roi_masks[:num_rois]
-    roi_traces = roi_traces[:num_rois]
-    roi_labels = roi_labels[:num_rois]
-
+    num_trace_rois = min(len(roi_traces), max_rois)
+    trace_subset = roi_traces[:num_trace_rois]
+    trace_labels = roi_labels[:num_trace_rois]
+    
+    if gt_traces is not None:
+        gt_trace_subset = gt_traces[:num_trace_rois]
+    else:
+        gt_trace_subset = None
 
     img_h, img_w = background_img.shape[:2]
     img_aspect = img_h / img_w
 
-    # --- DYNAMIC HEIGHT CALCULATION ---
-    # Constraint 1: Traces must have enough space (e.g., 1.2 inches each)
-    height_per_roi = 0.5 
-    header_space = 2.0
-    trace_min_height = header_space + (num_rois * height_per_roi)
-
-    # Constraint 2: Image must not be crunched
-    # We estimate the left column width is ~40% of the figure width.
-    # If figure width is 16, left col is ~6.4 inches wide.
-    # To maintain aspect ratio, height must be at least: width * aspect_ratio
-    est_col_width = 16 * 0.4 
-    image_min_height = (est_col_width * img_aspect) + header_space
-
-    fig_height = max(8.0, trace_min_height, image_min_height)
-
-    # Setup Figure
-    fig = plt.figure(figsize=(16, fig_height), dpi=dpi)
-    
-    # GridSpec
-    # wspace=0.15, hspace=0.5 (generous vertical space)
-    gs = gridspec.GridSpec(max(1, num_rois), 2, figure=fig, width_ratios=[1, 1.5], wspace=0.15, hspace=0.5)
-    
-    # Title positioning
-    # We anchor the title to the top edge minus a small margin relative to figure height
-    title_y_pos = 1.0 - (0.3 / fig_height) # 0.3 inches from top
-    fig.suptitle(title, fontsize=20, fontweight="bold", y=title_y_pos)
-
     try:
-        colors = plt.get_cmap(cmap)(np.linspace(0, 1, num_rois))
+        # Generate colors based on the total number of masks so the 
+        # subset of traces keeps the exact same color mapping
+        colors = plt.get_cmap(cmap)(np.linspace(0, 1, len(roi_masks)))
     except AttributeError:
         raise ValueError(f"Colormap {cmap} has not enough colors to plot all ROIs.")
 
-    # ---------------------------------------------------------
-    # LEFT PLOT: Spatial Map
-    # ---------------------------------------------------------
-    ax_map = fig.add_subplot(gs[:, 0])
+    # Setup separate save paths
+    full_path = Path(save_filepath)
+    spatial_path = full_path.with_name(f"{full_path.stem}_spatial{full_path.suffix}")
+    temporal_path = full_path.with_name(f"{full_path.stem}_temporal{full_path.suffix}")
+
+    # =========================================================
+    # PLOT 1: Spatial Map (Plots ALL masks)
+    # =========================================================
+    fig_spatial = plt.figure(figsize=(10, 10 * img_aspect), dpi=dpi)
+    ax_map = fig_spatial.add_subplot(111)
     
-    # Force alignment to the top if we have extra whitespace
-    ax_map.set_anchor('N') 
-    
+    fig_spatial.suptitle(f"{title} Spatial Layout", fontsize=20, fontweight="bold")
+
     # Robust contrast stretching
     vmin, vmax = np.percentile(background_img, [1, 99])
     ax_map.imshow(background_img, cmap="gray", vmin=vmin, vmax=vmax, interpolation="bilinear")
 
-    for i in range(num_rois):
+    for i in range(len(roi_masks)):
         contours = find_contours(roi_masks[i], 0.5)
         largest_contour_idx = -1
         max_len = 0
@@ -631,20 +614,20 @@ def plot_summary_image(
                 min_y, max_y = np.argmin(ys), np.argmax(ys)
                 min_x, max_x = np.argmin(xs), np.argmax(xs)
                 candidates = [
-                    (ys[min_y], xs[min_y], 'bottom', 'center'),
-                    (ys[max_y], xs[max_y], 'top', 'center'),   
-                    (ys[min_x], xs[min_x], 'center', 'right'), 
-                    (ys[max_x], xs[max_x], 'center', 'left')   
+                    (ys[min_y], xs[min_y], "bottom", "center"),
+                    (ys[max_y], xs[max_y], "top", "center"),   
+                    (ys[min_x], xs[min_x], "center", "right"), 
+                    (ys[max_x], xs[max_x], "center", "left")   
                 ]
                 np.random.shuffle(candidates)
                 final_pos = candidates[0]
                 margin = img_h * 0.05    
 
                 for y, x, va, ha in candidates:
-                    if not (va=='bottom' and y<margin) and \
-                       not (va=='top' and y>(img_h-margin)) and \
-                       not (ha=='right' and x<margin) and \
-                       not (ha=='left' and x>(img_w-margin)):
+                    if not (va=="bottom" and y<margin) and \
+                       not (va=="top" and y>(img_h-margin)) and \
+                       not (ha=="right" and x<margin) and \
+                       not (ha=="left" and x>(img_w-margin)):
                         final_pos = (y, x, va, ha)
                         break
 
@@ -659,47 +642,63 @@ def plot_summary_image(
                 )
                 txt.set_path_effects([pe.withStroke(linewidth=2, foreground="white")])
 
-    if md is not None:
-        try:
-            md.get("scale", [])
-            bar_px = (100 / md["scale"])
-            scalebar = AnchoredSizeBar(ax_map.transData, bar_px, "100 \u03bcm", "lower right", pad=0.5, color="white", frameon=False, size_vertical=2)
-            ax_map.add_artist(scalebar)
-        except:
-            logger.warning("No scale found in metadata object!")
+    # add scale bar to the plot
+    md.get("scale", [])
+    bar_px = (100 / md["scale"])
+    scalebar = AnchoredSizeBar(ax_map.transData, bar_px, "100 \u03bcm", "lower right", pad=0.5, color="white", frameon=False, size_vertical=2)
+    ax_map.add_artist(scalebar)
+    
+    # finish layout and save plot
     ax_map.axis("off")
+    fig_spatial.tight_layout()
+    fig_spatial.savefig(spatial_path, dpi=dpi, bbox_inches="tight")
+    plt.close(fig_spatial)
+    logger.info(f"Spatial Image saved to {spatial_path}")
 
-    # ---------------------------------------------------------
-    # RIGHT PLOTS: Stacked Traces
-    # ---------------------------------------------------------
+    # =========================================================
+    # PLOT 2: Temporal Traces (Plots limited subset of traces)
+    # =========================================================
+    # Dynamic height calculation based on number of traces
+    height_per_roi = 0.5 
+    header_space = 2.0
+    trace_min_height = header_space + (num_trace_rois * height_per_roi)
+    fig_height = max(8.0, trace_min_height)
+
+    fig_temporal = plt.figure(figsize=(10, fig_height), dpi=dpi)
+    gs = gridspec.GridSpec(max(1, num_trace_rois), 1, figure=fig_temporal, hspace=0.5)
+    
+    title_y_pos = 1.0 - (0.3 / fig_height)
+    fig_temporal.suptitle(f"{title}Temporal Activity", fontsize=20, fontweight="bold", y=title_y_pos)
+
     time_seconds = np.arange(n_frames) / fps
     axes_traces = []
     
-    ax_first = fig.add_subplot(gs[0, 1])
+    ax_first = fig_temporal.add_subplot(gs[0, 0])
     axes_traces.append(ax_first)
 
-    for i in range(num_rois):
+    for i in range(num_trace_rois):
         if i == 0:
             ax_trace = ax_first
         else:
-            ax_trace = fig.add_subplot(gs[i, 1], sharex=ax_first)
+            ax_trace = fig_temporal.add_subplot(gs[i, 0], sharex=ax_first)
             axes_traces.append(ax_trace)
         
-        raw_trace = roi_traces[i]
+        raw_trace = trace_subset[i]
         if np.std(raw_trace) < 1e-6:
             trace_z = np.zeros_like(raw_trace)
         else:
             if skew(raw_trace) < 0: raw_trace = -raw_trace
             trace_z = zscore(raw_trace)
-        if gt_traces is not None:
-            raw_trace = gt_traces[i]
-            if np.std(raw_trace) < 1e-6:
-                trace_z_gt = np.zeros_like(raw_trace)
+        
+        if gt_trace_subset is not None:
+            raw_trace_gt = gt_trace_subset[i]
+            if np.std(raw_trace_gt) < 1e-6:
+                trace_z_gt = np.zeros_like(raw_trace_gt)
             else:
-                if skew(raw_trace) < 0: raw_trace = -raw_trace
-                trace_z_gt = zscore(raw_trace)
+                if skew(raw_trace_gt) < 0: raw_trace_gt = -raw_trace_gt
+                trace_z_gt = zscore(raw_trace_gt)
         else:
-            trace_z_gt= None
+            trace_z_gt = None
         
         if trace_z_gt is not None:
             ax_trace.plot(time_seconds, trace_z_gt, color="#000000", linewidth=1.2)
@@ -707,38 +706,34 @@ def plot_summary_image(
         ax_trace.grid(True, linestyle="--", linewidth=0.5, color="#9e9b9b", alpha=0.5)
         ax_trace.set_axisbelow(True)
 
-        ax_trace.text(0.01, 0.85, f"ROI {roi_labels[i]}", transform=ax_trace.transAxes, fontsize=10, fontweight="bold", color="black")
+        ax_trace.text(0.01, 0.85, f"ROI {trace_labels[i]}", transform=ax_trace.transAxes, fontsize=10, fontweight="bold", color="black")
 
         ax_trace.set_ylabel("z-score", fontsize=8, labelpad=10)
-        ax_trace.yaxis.set_major_locator(plt.MaxNLocator(nbins=3, prune='both'))
-        ax_trace.tick_params(axis='y', labelsize=7)
+        ax_trace.yaxis.set_major_locator(plt.MaxNLocator(nbins=3, prune="both"))
+        ax_trace.tick_params(axis="y", labelsize=7)
 
         ax_trace.spines["top"].set_visible(False)
         ax_trace.spines["right"].set_visible(False)
         
-        if i < num_rois - 1:
+        if i < num_trace_rois - 1:
             ax_trace.tick_params(labelbottom=False, bottom=True) 
             ax_trace.spines["bottom"].set_visible(True) 
         else:
             ax_trace.set_xlabel("Time (s)", fontsize=10)
-            ax_trace.tick_params(axis='x', labelsize=9)
+            ax_trace.tick_params(axis="x", labelsize=9)
 
     ax_first.set_xlim(time_seconds[0], time_seconds[-1])
-    fig.align_ylabels(axes_traces)
+    fig_temporal.align_ylabels(axes_traces)
 
-    # TITLES - Anchored relative to top of figure (safe for dynamic height)
-    # We calculate the Y position to be just below the suptitle
     header_y = 1.0 - (0.8 / fig_height)
-    fig.text(0.28, header_y, "Neuron ROIs", fontsize=14, fontweight="bold", ha="center", va="top")
-    fig.text(0.72, header_y, "Activity Traces (Z-scored)", fontsize=14, fontweight="bold", ha="center", va="top")
+    fig_temporal.text(0.5, header_y, "Activity Traces (Z-scored)", fontsize=14, fontweight="bold", ha="center", va="top")
 
     # Margin adjust
     plt.subplots_adjust(top=1.0 - (1.2 / fig_height), bottom=0.05, left=0.05, right=0.95)
 
-    full_path = Path(save_filepath)
-    fig.savefig(full_path, dpi=dpi, bbox_inches="tight")
-    plt.close(fig)
-    logger.info(f"Summary Image saved to {full_path}")
+    fig_temporal.savefig(temporal_path, dpi=dpi, bbox_inches="tight")
+    plt.close(fig_temporal)
+    logger.info(f"Temporal Image saved to {temporal_path}")
 
 
 @suppress_gui()
@@ -748,6 +743,7 @@ def plot_segmentation_performance(
     tp_pairs: list,
     fn_indices: list,
     fp_indices: list,
+    md: dict,
     results: dict,
     save_path: Path,
     ):
@@ -757,6 +753,7 @@ def plot_segmentation_performance(
     h, w = gt_masks.shape[1], gt_masks.shape[2]
     
     plt.figure(figsize=(12, 12), dpi=150)
+    ax = plt.gca()
     plt.imshow(np.zeros((h, w)), cmap="gray", interpolation="nearest")
     
     # 1. Plot False Negatives (Missed GTs)
@@ -784,10 +781,16 @@ def plot_segmentation_performance(
     ]
     
     plt.legend(handles=legend_elements, loc="upper right")
+
+    # add scale bar to the plot
+    md.get("scale", [])
+    bar_px = (100 / md["scale"])
+    scalebar = AnchoredSizeBar(ax.transData, bar_px, "100 \u03bcm", "lower right", pad=0.5, color="white", frameon=False, size_vertical=2)
+    ax.add_artist(scalebar)
     
-    title_str = (f"Performance\n"
+    title_str = (f"Segmentation Performance\n"
                  f"Recall: {results['spatial']['recall']:.2f} | Precision: {results['spatial']['precision']:.2f}")
-    plt.title(title_str)
+    plt.title(title_str, fontweight="bold")
     plt.axis("off")
     
     plt.savefig(save_path / "segmentation_performance.png", bbox_inches="tight", dpi=300)
@@ -902,6 +905,7 @@ def plot_mask_comparison(
     pred_masks,
     pred_traces,
     tp_pairs,
+    md,
     save_filepath,
     fps=1.0,
     unit="z-score",
@@ -966,6 +970,11 @@ def plot_mask_comparison(
             ax_spatial.imshow(data["mask"], cmap=cmap, interpolation="nearest")
             ax_spatial.set_title(f"Pair: {i}; {data["type"]} (ID: {data["idx"]})", fontsize=12, fontweight="bold", pad=8)
             ax_spatial.axis("off")
+            # add scale bar to the plot
+            md.get("scale", [])
+            bar_px = (100 / md["scale"])
+            scalebar = AnchoredSizeBar(ax_spatial.transData, bar_px, "100 \u03bcm", "lower right", pad=0.5, color="white", frameon=False, size_vertical=2)
+            ax_spatial.add_artist(scalebar)
 
             # --- Temporal Trace Plot ---
             ax_time = fig.add_subplot(inner_grid[1])
@@ -997,6 +1006,7 @@ def plot_spatial_performance(
     save_path: Path,
     ious: list,
     dices: list,
+    md: dict,
     title: str,
     pred_labels: list,
     ):
@@ -1043,6 +1053,12 @@ def plot_spatial_performance(
         ]
         
         ax.legend(handles=legend_elements, loc="upper right")
+
+        # add scale bar to the plot
+        md.get("scale", [])
+        bar_px = (100 / md["scale"])
+        scalebar = AnchoredSizeBar(ax.transData, bar_px, "100 \u03bcm", "lower right", pad=0.5, color="white", frameon=False, size_vertical=2)
+        ax.add_artist(scalebar)
         
         if ious and dices:
             title_str = (f"Spatial Performance: Mask {i}\n"

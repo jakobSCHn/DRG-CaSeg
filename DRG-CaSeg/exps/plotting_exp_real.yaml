@@ -1,0 +1,54 @@
+experiment_name: "plotting_exp_real"
+
+dataset:
+- id: "real_1st_A2"
+  loader: data_utils.wrangler.load_czi_to_caiman
+  params:
+    filename: "/home/jschneider/projects/DRG-CaSeg/data/1st A2.czi"
+- id: "real_2nd_A1"
+  loader: data_utils.wrangler.load_czi_to_caiman
+  params:
+    filename: "/home/jschneider/projects/DRG-CaSeg/data/2nd A1.czi"
+- id: "real_3rd_B2"
+  loader: data_utils.wrangler.load_czi_to_caiman
+  params:
+    filename: "/home/jschneider/projects/DRG-CaSeg/data/3rd B2.czi"
+  
+preprocessing:
+  - id: "scaling"
+    function: data_utils.wrangler.scale_video
+    params:
+      min_intensity: 0
+      max_intensity: 255 
+  - id: "normalization"
+    function: data_utils.wrangler.norm_video
+  - id: "motion_correction"
+    function: data_utils.wrangler.correct_motion
+
+analysis:
+  - id: "caiman_default"
+    function: analysis_utils.caiman.run_cnmfe
+    export_matrices: True
+  - id: "ica_mukamel_n_40"
+    function: analysis_utils.workflow.run_ica
+    export_matrices: True
+    params:
+      mu: 0.5
+      n_pcs: 40
+  - id: "ica_mukamel_n_120"
+    function: analysis_utils.workflow.run_ica
+    export_matrices: True
+    params:
+      mu: 0.5
+      n_pcs: 120
+
+postprocessing:
+  - id: "discard_background"
+    function: postprocessing.processing_adapters.filter_background_masks
+  - id: "filter_traces"
+    function: postprocessing.processing_adapters.bandpass_filter_traces
+
+visualization:
+  - id: "prediction_plot"
+    function: data_utils.plot_adapters.plot_adapter_prediction_summary
+  

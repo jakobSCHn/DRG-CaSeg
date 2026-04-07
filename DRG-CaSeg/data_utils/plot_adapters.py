@@ -13,12 +13,12 @@ def plot_adapter_prediction_summary(
     background_img,
     stage,
     save_filepath,
+    md,
     fps=None,
     cmap="viridis",
     dpi=300,
     ):
 
-    md = data.meta_data[0]
     if fps is None:
         fps = getattr(data, "fr", None) or 30
 
