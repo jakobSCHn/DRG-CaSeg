@@ -291,13 +291,14 @@ def load_czi_to_caiman(
                 num_img_timepoints = np.fromstring(img_timepoints, sep=" ") #Cast the timestamps to be numerical instead of being formatted as a string
                 median_diff = np.median(np.diff(num_img_timepoints))
                 fr = 1 / median_diff
-                # extract addtional metadata of interest
-                scale = md['ImageDocument']['Metadata']['Scaling']['Items']['Distance'][0]['Value']
             except:
                 increment = md["ImageDocument"]["Metadata"]["Information"]["Image"]["Dimensions"]["T"]["Positions"]["Interval"]["Increment"]
                 fr = 1 / float(increment)
         else:
             fr = meta_data["fr"]
+
+        # extract additional metadata of interest
+        scale = md['ImageDocument']['Metadata']['Scaling']['Items']['Distance'][0]['Value']
 
         # build dict of metadata of interest (too big to store all of it)
         md_oI = {
