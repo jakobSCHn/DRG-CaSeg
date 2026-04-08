@@ -412,20 +412,6 @@ def correct_motion(
 
         float_mov = np.array(corrected_mov, dtype="float32")
         corrected_background_img = np.nanpercentile(float_mov, 98, axis=0)
-
-        import matplotlib.pyplot as plt
-        plt.figure(figsize=(10, 5))
-
-        # Plot the first frame of the RAW movie
-        plt.subplot(1, 2, 1)
-        plt.imshow(mov[100], cmap='gray') 
-        plt.title("Raw Frame 0")
-
-        # Plot the first frame of the CORRECTED movie
-        plt.subplot(1, 2, 2)
-        plt.imshow(corrected_mov[100], cmap='gray')
-        plt.title("Corrected Frame 0")
-        plt.show()
     
         return corrected_mov, corrected_background_img
     

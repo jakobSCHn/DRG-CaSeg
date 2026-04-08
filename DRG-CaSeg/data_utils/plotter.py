@@ -880,7 +880,7 @@ def plot_temporal_performance(
         ax.plot(time_axis, t_gt_norm, color=gt_color, linewidth=1.5, alpha=0.8, label="Ground Truth")
         
         # --- Custom Labelling Logic ---
-        p_name = pred_labels[pred_idx] if pred_labels else pred_idx
+        p_name = pred_labels[pred_idx] if pred_labels is not None else pred_idx
         flip_text = " (trace inverted)" if is_flipped else ""
         label_text = f"Pair #{i+1} (GT {gt_idx} | Pred {p_name}) - Pearson r: {corr:.3f}{flip_text}"
         
