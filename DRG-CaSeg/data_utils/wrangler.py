@@ -280,24 +280,31 @@ def load_czi_to_caiman(
 
     with czifile.CziFile(filename) as czi:
         raw_image_data = czi.asarray()
-        
-        if meta_data is None:
-            md_xml = czi.metadata()
-            md = xmltodict.parse(md_xml, attr_prefix="")
-
+        # fetch metadata from the file itself
+        md_xml = czi.metadata()
+        md = xmltodict.parse(md_xml, attr_prefix="")
 
         if fr is None and meta_data is None:
-            #Extract the offsets the frames were taken at to calculate the frame rate
             try:
+                #Extract the offsets the frames were taken at to calculate the frame rate
                 img_timepoints = md["ImageDocument"]["Metadata"]["Information"]["Image"]["Dimensions"]["T"]["Positions"]["List"]["Offsets"]
                 num_img_timepoints = np.fromstring(img_timepoints, sep=" ") #Cast the timestamps to be numerical instead of being formatted as a string
                 median_diff = np.median(np.diff(num_img_timepoints))
                 fr = 1 / median_diff
+                # extract addtional metadata of interest
+                scale = md['ImageDocument']['Metadata']['Scaling']['Items']['Distance'][0]['Value']
             except:
                 increment = md["ImageDocument"]["Metadata"]["Information"]["Image"]["Dimensions"]["T"]["Positions"]["Interval"]["Increment"]
                 fr = 1 / float(increment)
         else:
             fr = meta_data["fr"]
+
+        # build dict of metadata of interest (too big to store all of it)
+        md_oI = {
+            "scale": float(scale) * 1e6, # directly convert to micrometer
+        }
+        # combine passed and selected fetched metadata into a single dictionary
+        meta_data = (md_oI or {}) | (meta_data or {}) # prioritize passed meta_data if same keys exist
 
     
     image_data = raw_image_data.squeeze()
