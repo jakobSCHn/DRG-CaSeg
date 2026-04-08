@@ -24,7 +24,7 @@ def extract_cnmfe_results(
 
     labels = np.arange(len(bin_masks)).tolist()
 
-    return bin_masks, traces, labels
+    return bin_masks, traces, np.array(labels)
 
 
 def get_default_params(

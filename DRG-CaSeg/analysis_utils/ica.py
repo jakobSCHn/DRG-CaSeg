@@ -347,7 +347,7 @@ def extract_rois_and_traces(
     return (
         final_roi_masks_array,
         final_roi_traces_array,
-        roi_labels,
+        np.array(roi_labels),
         n_components,
         used_components,
         binary_masks,

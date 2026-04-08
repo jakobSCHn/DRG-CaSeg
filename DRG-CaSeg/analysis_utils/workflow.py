@@ -24,6 +24,7 @@ def run_ica(
     """
     Orchestrates PCA dimensionality reduction followed by ICA source extraction.
     """
+    md = mov.meta_data[0]
     
     mixedsig, mixedfilters, cov_evals, cov_trace, movm, movtm = cellsort_pca(
         mov.astype(np.float32), 
@@ -42,6 +43,7 @@ def run_ica(
     plot_spatial_filters(
         spatial_filters=ica_filters,
         save_filepath=save_filepath,
+        md=md,
         title="ICA Spatial Components",
         subtitle="IC",
         file_ext="spatial_components.png",
@@ -50,6 +52,7 @@ def run_ica(
         spatial_filters=ica_filters,
         time_courses=ica_sig,
         save_filepath=save_filepath,
+        md=md,
         sampling_rate=30,
         title="ICA Temporal & Spatial Components",
         subtitle="IC",
@@ -74,6 +77,7 @@ def run_ica(
     plot_spatial_filters(
         spatial_filters=binary_mask,
         save_filepath=save_filepath,
+        md=md,
         title="Binary Masks extracted from Independent Components",
         subtitle="Binary Mask",
         file_ext="binary_masks.png"
@@ -81,6 +85,7 @@ def run_ica(
     plot_spatial_filters(
         spatial_filters=cleaned_mask,
         save_filepath=save_filepath,
+        md=md,
         title="Cleand Masks extracted from Independent Components",
         subtitle="Cleaned Mask",
         file_ext="cleaned_masks.png"

@@ -71,6 +71,8 @@ dataset:
       filename: "/home/jschneider/projects/DRG-CaSeg/data/5th_B3.czi"
 
 preprocessing:
+  - id: "motion_correction"
+    function: data_utils.wrangler.correct_motion
   - id: "scaling"
     function: data_utils.wrangler.scale_video
     params:
@@ -78,13 +80,16 @@ preprocessing:
       max_intensity: 255 
   - id: "normalization"
     function: data_utils.wrangler.norm_video
-  - id: "motion_correction"
-    function: data_utils.wrangler.correct_motion
 
 analysis:
   - id: "caiman_default"
     function: analysis_utils.caiman.run_cnmfe
     export_matrices: True
+  - id: "caiman_decay_0.4s"
+    function: analysis_utils.caiman.run_cnmfe
+    export_matrices: True
+    params:
+      decay_time: 0.4
   - id: "ica_mukamel_n_40"
     function: analysis_utils.workflow.run_ica
     export_matrices: True

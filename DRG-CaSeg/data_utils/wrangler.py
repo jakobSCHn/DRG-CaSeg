@@ -188,7 +188,7 @@ def load_drg_model_video(
         logger.info(f"Initialized synthetic generator with Seed: {seed}")
 
     #Separate Model Params from Wrapper Params and remove what's not meant for the constructor
-    wrapper_specific_keys = ["id", "seed", "perturbation", "cluster", "n_processes"]
+    wrapper_specific_keys = ["id", "seed", "perturbation", "cluster_factory", "n_processes", "backend"]
     model_params = {k: v for k, v in params.items() if k not in wrapper_specific_keys}
     
     #Initialize the model
@@ -368,6 +368,13 @@ def correct_motion(
     n_processes = None,
     **params,
     ):
+    # save metadata from the movie object
+    fr_mov = mov.fr,
+    start_time_mov = mov.start_time,
+    file_name_mov = mov.file_name,
+    meta_data_mov = mov.meta_data
+
+
     unique_id = uuid.uuid4().hex
     temp_filename = f"temp_mc_{unique_id}.mmap"
     
@@ -397,7 +404,30 @@ def correct_motion(
         corrector.motion_correct(save_movie=False)
         corrected_mov = corrector.apply_shifts_movie(fname_path)
         
-        return corrected_mov
+        # re-apply metadata to new movie object
+        corrected_mov.fr = fr_mov[0]
+        corrected_mov.start_time = start_time_mov[0]
+        corrected_mov.file_name = file_name_mov[0]
+        corrected_mov.meta_data = meta_data_mov
+
+        float_mov = np.array(corrected_mov, dtype="float32")
+        corrected_background_img = np.nanpercentile(float_mov, 98, axis=0)
+
+        import matplotlib.pyplot as plt
+        plt.figure(figsize=(10, 5))
+
+        # Plot the first frame of the RAW movie
+        plt.subplot(1, 2, 1)
+        plt.imshow(mov[100], cmap='gray') 
+        plt.title("Raw Frame 0")
+
+        # Plot the first frame of the CORRECTED movie
+        plt.subplot(1, 2, 2)
+        plt.imshow(corrected_mov[100], cmap='gray')
+        plt.title("Corrected Frame 0")
+        plt.show()
+    
+        return corrected_mov, corrected_background_img
     
     finally:
         #Clean up multiprocessing ressources

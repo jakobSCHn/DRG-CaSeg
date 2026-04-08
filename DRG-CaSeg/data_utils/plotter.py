@@ -13,6 +13,7 @@ import cv2
 import math
 import caiman as cm
 import matplotlib.gridspec as gridspec
+import matplotlib.patheffects as pe
 
 from skimage.measure import find_contours
 from matplotlib.patches import Patch
@@ -22,6 +23,7 @@ from contextlib import contextmanager
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 
 logger = logging.getLogger(__name__)
+
 
 @contextmanager
 def suppress_gui():
@@ -38,6 +40,7 @@ def suppress_gui():
     finally:
         #restore the original backend (e.g., 'Qt5Agg')
         matplotlib.use(original_backend, force=True)
+
 
 @suppress_gui()
 def plot_image(
@@ -407,6 +410,7 @@ def plot_contour_and_trace(
 def plot_spatial_filters(
     spatial_filters,
     save_filepath,
+    md,
     cmap="Greens",
     dpi=300,
     title="Spatial Components",
@@ -453,6 +457,11 @@ def plot_spatial_filters(
         ax.set_title(f"{subtitle} #{i+1}", fontsize=10)
         ax.axis("off") # Removes ticks and frame for a cleaner mask-like view
 
+        # add the scale bar
+        bar_px = (100 / md["scale"])
+        scalebar = AnchoredSizeBar(ax.transData, bar_px, "100 \u03bcm", "lower right", pad=0.5, color="black", frameon=False, size_vertical=2)
+        ax.add_artist(scalebar)
+
     # Hide any unused subplots in the grid
     for j in range(i + 1, len(axes_flat)):
         axes_flat[j].axis("off")
@@ -467,6 +476,7 @@ def plot_ica_components(
     spatial_filters,
     time_courses,
     save_filepath,
+    md,
     sampling_rate=1.0,
     unit="z-score",
     cmap="Greens",
@@ -515,6 +525,12 @@ def plot_ica_components(
         ax_spatial.imshow(spatial_filters[i], cmap=cmap, interpolation="nearest", aspect="equal")
         ax_spatial.set_title(f"{subtitle} #{i+1}", fontsize=14, fontweight="bold", pad=10)
         ax_spatial.axis("off")
+
+        # add the scale bar
+        md.get("scale", [])
+        bar_px = (100 / md["scale"])
+        scalebar = AnchoredSizeBar(ax_spatial.transData, bar_px, "100 \u03bcm", "lower right", pad=0.5, color="white", frameon=False, size_vertical=2)
+        ax_spatial.add_artist(scalebar)
 
         # --- 3. PLOT TEMPORAL TRACE ---
         ax_time = fig.add_subplot(inner_grid[1])

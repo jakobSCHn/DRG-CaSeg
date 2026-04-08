@@ -9,11 +9,13 @@ from skimage import morphology as morph
 
 def mask_background(
     masks: np.ndarray,
+    traces: np.ndarray,
+    labels: np.ndarray,
     background_img: np.ndarray,
     brightness_threshold: float,
     overlap_threshold: float,
     max_size: int,  
-    ):
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     #Extract the background from the tissue image
     bg_min = np.min(background_img)
     bg_max = np.max(background_img)
@@ -42,7 +44,7 @@ def mask_background(
     #Logic indexing for deciding which masks to keep and which to drop
     foreground_idx = valid_mask_idx & (overlap_pct <= overlap_threshold)
 
-    return masks[foreground_idx]
+    return masks[foreground_idx], traces[foreground_idx], labels[foreground_idx]
 
 
 def filter_traces(

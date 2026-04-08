@@ -67,6 +67,8 @@ class Experiment:
         runtime_context: dict,
         ):
 
+        background_img = None
+
         for step_pre in steps:
             logger.info(f"Preprocessing: {step_pre["id"]}")
             preprocessor = configure_callable(
@@ -77,7 +79,11 @@ class Experiment:
             )
             data = preprocessor(data)
 
-        return data
+            if isinstance(data, tuple) and len(data) > 1:
+                data = data[0]
+                background_img = data[1]
+
+        return data, background_img
 
 
     def _analyze(
@@ -237,11 +243,13 @@ class Experiment:
 
             #Preprocess the loaded data
             if preprocessing:
-                data = self._preprocess(
+                data, bckg_img = self._preprocess(
                     data=data,
                     steps=preprocessing,
                     runtime_context=runtime_context,
                 )
+                if bckg_img is not None:
+                    background_img = bckg_img
             else:
                 logger.warning(f"No preprocessing configured.")
 

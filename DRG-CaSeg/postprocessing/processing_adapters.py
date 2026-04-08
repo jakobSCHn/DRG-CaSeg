@@ -21,9 +21,13 @@ def filter_background_masks(
     ):
 
     masks = results["masks"]
+    traces = results["traces"]
+    labels = results["labels"]
 
-    filtered_masks = pu.mask_background(
+    filtered_masks, filtered_traces, filtered_labels = pu.mask_background(
         masks=masks,
+        traces=traces,
+        labels=labels,
         background_img=background_img,
         brightness_threshold=brightness_threshold,
         overlap_threshold=overlap_threshold,
@@ -31,6 +35,8 @@ def filter_background_masks(
     )
 
     results["masks"] = filtered_masks
+    results["traces"] = filtered_traces
+    results["labels"] = filtered_labels
 
     return results
 

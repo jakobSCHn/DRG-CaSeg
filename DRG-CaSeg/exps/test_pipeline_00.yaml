@@ -1,12 +1,20 @@
 experiment_name: "test_pipeline_00"
 
 dataset:
+  - id: "syn"
+    loader: data_utils.wrangler.load_drg_model_video
+    params:
+      fps: 30
+      duration_s: 20
+      full_well_capacity: 15000
   - id: "cut_test_vid"
     loader: data_utils.wrangler.load_czi_to_caiman
     params:
       filename: "/home/jaschneider/projects/DRG-CaSeg/data/test_00_3rdB2.czi"
-
+  
 preprocessing:
+  - id: "motion_correction"
+    function: data_utils.wrangler.correct_motion
   - id: "scaling"
     function: data_utils.wrangler.scale_video
     params:
@@ -14,20 +22,14 @@ preprocessing:
       max_intensity: 255 
   - id: "normalization"
     function: data_utils.wrangler.norm_video
-  - id: "motion_correction"
-    function: data_utils.wrangler.correct_motion
+
 
 analysis:
-  - id: "caiman_10s"
-    function: analysis_utils.caiman.run_cnmfe
+  - id: "ica_mukamel"
+    function: analysis_utils.workflow.run_ica
     export_matrices: True
     params:
-      decay_time: 10
-  - id: "caiman_75s"
-    function: analysis_utils.caiman.run_cnmfe
-    export_matrices: True
-    params:
-      decay_time: 75
+      mu: 0.5
 
 postprocessing:
   - id: "discard_background"
