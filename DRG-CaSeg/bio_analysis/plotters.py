@@ -768,7 +768,7 @@ def visualize_random_peaks(
     Displays the detection parameters in the figure title.
     """
     n_traces = time_traces.shape[0]
-    sample_indices = np.random.choice(n_traces, size=n_samples, replace=False)
+    sample_indices = np.random.choice(n_traces, size=min(n_samples, n_traces), replace=False)
     
     cols = 4
     rows = int(np.ceil(n_samples / cols))

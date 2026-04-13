@@ -146,15 +146,21 @@ def calculate_sample_correlation(
     fs: float,
     stimuli_regions: dict[tuple[float, float]] | None = None,
     ):
-    if stimuli_regions is None:
-        stimuli_regions = []
 
     n_traces = data.shape[0]
     results = {}
 
+    # skip feature calculations if less than 2 neurons are availble in the sample
+    if n_traces < 2:
+        results["sample_corr_global"] = [np.nan] * n_traces
+        return results
+
+    if stimuli_regions is None:
+        stimuli_regions = []
+
     with np.errstate(divide="ignore", invalid="ignore"):
         #calculate in-sample correlation for full trace
-        corr_matrix_global = np.corrcoef(data)
+        corr_matrix_global = np.abs(np.corrcoef(data))
         upper_tri_global = corr_matrix_global[np.triu_indices_from(corr_matrix_global, k=1)]
         results["sample_corr_global"] = [np.nanmean(upper_tri_global)] * n_traces
 
@@ -165,7 +171,7 @@ def calculate_sample_correlation(
 
             stimulus_traces = data[:, start_idx:end_idx]
 
-            stimulus_corr = np.corrcoef(stimulus_traces)
+            stimulus_corr = np.abs(np.corrcoef(stimulus_traces))
             stimulus_upper = stimulus_corr[np.triu_indices_from(stimulus_corr, k=1)]
 
             results[f"stimulus_corr_{stim}"] = [np.nanmean(stimulus_upper)] * n_traces

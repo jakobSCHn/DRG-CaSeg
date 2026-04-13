@@ -379,6 +379,8 @@ def correct_motion(
     temp_filename = f"temp_mc_{unique_id}.mmap"
     
     fname_path = mov.save(temp_filename, order="C")
+    #get the param on whether to process the background image
+    return_background = params.pop("background_image", True)
 
     #remove the "id" parameter as it's not used in caiman but should be present at function call
     params.pop("id")
@@ -412,8 +414,11 @@ def correct_motion(
 
         float_mov = np.array(corrected_mov, dtype="float32")
         corrected_background_img = np.nanpercentile(float_mov, 98, axis=0)
-    
-        return corrected_mov, corrected_background_img
+
+        if return_background:
+            return corrected_mov, corrected_background_img
+        else:
+            return corrected_mov  
     
     finally:
         #Clean up multiprocessing ressources

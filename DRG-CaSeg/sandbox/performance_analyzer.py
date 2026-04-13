@@ -112,7 +112,7 @@ def plot_violin(
         bbox={"facecolor": "white", "edgecolor": "black", "boxstyle": "round,pad=0.4"}
     )
     
-    save_path = Path(save_path) / f"{x}_violin_plot.png"
+    save_path = Path(save_path) / f"{x}_violin_plot_n_F1.png"
 
     plt.tight_layout()
     plt.savefig(save_path, dpi=300)
@@ -242,9 +242,9 @@ def main():
         data=df,
         x="Param_Group",
         y="spatial_f1_score",
-        x_label=r"$\mu$ Group",
+        x_label=r"Number of Components",
         y_label="F1 Score",
-        title=r"Effect of $\mu$ on F1 Score Distribution",
+        title=r"Effect of Component Count on F1 Score Distribution",
         save_path="/home/jaschneider/projects/DRG-CaSeg/thesis_plots/"
     )
     plot_metric_stability(
