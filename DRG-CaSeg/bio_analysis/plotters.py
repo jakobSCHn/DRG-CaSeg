@@ -10,6 +10,17 @@ import helpers
 from matplotlib.ticker import PercentFormatter
 
 
+#define a global color palette to use for all plots
+cb_colors = sns.color_palette("colorblind")
+HUE_COLORS = {
+    "Control": cb_colors[0],
+    "Cytokine": cb_colors[1],
+}
+PLOTTING_ORDER = [
+    "Control",
+    "Cytokine",
+]
+
 def plot_feature_boxplot(
     df: pd.DataFrame, 
     feature_column: str, 
@@ -210,7 +221,7 @@ def plot_responder_proportions(
         err_kws={"linewidth": 1.5, "color": "black"},
         ax=ax,
         zorder=2,
-        palette="colorblind",
+        palette=HUE_COLORS,
     )
 
     # 5. Formatting aesthetics
@@ -261,7 +272,7 @@ def plot_peak_heights_per_stimulus(
         linewidth=1.0,
         ax=ax,
         zorder=1,
-        palette="colorblind",
+        palette=HUE_COLORS,
         cut=0.0              # Don't extend density past data limits
     )
 
@@ -276,7 +287,7 @@ def plot_peak_heights_per_stimulus(
         jitter=True,
         ax=ax,
         zorder=2,            # On top of violin
-        palette="colorblind",
+        palette=HUE_COLORS,
         legend=False         # No duplicate legends
     )
 
@@ -352,6 +363,7 @@ def plot_peak_heights_per_selection(
         err_kws={"linewidth": 1.0, "color": "black"},
         ax=ax,
         zorder=2,
+        palette="colorblind",
     )
     sns.stripplot(
         data=df_clean, 
@@ -359,9 +371,10 @@ def plot_peak_heights_per_selection(
         y="peak_height", 
         hue="group", 
         alpha=0.6,
-        dodge=dodge_width,
+        dodge=HUE_COLORS,
         ax=ax,
-        zorder=1
+        zorder=1,
+        palette=HUE_COLORS,
     )
 
     ax.set_xlabel("Stimulus Condition", fontsize=12, fontweight="bold")
@@ -405,7 +418,7 @@ def plot_max_gradient(
         linewidth=1.0,
         ax=ax,
         zorder=1,
-        palette="colorblind",
+        palette=HUE_COLORS,
         cut=0.0,
     )
     
@@ -471,7 +484,7 @@ def plot_sample_correlations(df: pd.DataFrame):
         cut=0,
         ax=ax,
         zorder=1,
-        palette="colorblind"
+        palette=HUE_COLORS,
     )
 
     ax.set_xlabel("Stimulus Region", fontsize=12, fontweight="bold")
@@ -548,7 +561,7 @@ def plot_peak_jitter(
         linewidth=1.0,
         ax=ax,
         zorder=1,
-        palette="colorblind",
+        palette=HUE_COLORS,
     )
 
     # "6. Add sample size (n) annotations"
@@ -664,7 +677,7 @@ def plot_latency(
         linewidth=1.0,
         ax=ax,
         zorder=1,
-        palette="colorblind",
+        palette=HUE_COLORS,
         cut=0.0,
     )
 
@@ -681,7 +694,7 @@ def plot_latency(
         jitter=True,
         ax=ax,
         zorder=2,            # Draws on top of the violin outline
-        palette="colorblind",
+        palette=HUE_COLORS,
         legend=False,        # Prevents adding a duplicate legend
     )
 

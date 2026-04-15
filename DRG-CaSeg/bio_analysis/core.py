@@ -141,7 +141,6 @@ def run_bioanalysis(
         plotting_functions=plotting_functions,
     )
 
-    print(Hello)
 
     feature_save_path = (Path(__file__).parent / "trace_features.csv").resolve()
     feature_df.to_csv(feature_save_path)
