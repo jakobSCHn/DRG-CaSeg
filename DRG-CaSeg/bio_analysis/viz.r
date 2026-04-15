@@ -77,16 +77,23 @@ generate_feature_plot <- function(df, feature_name, save_path = NULL) {
   
   p <- ggplot(df_long, aes(x = stimulus, y = value, fill = group)) +
     
-    geom_violin(color = NA, position = position_dodge(0.8), alpha = 0.2) +
-    
     geom_point(aes(color = group), 
                position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.8), 
                alpha = 0.6, size = 1.5) +
     
+    # Thin dashed black line indicating the mean (with show.legend = FALSE)
     stat_summary(fun = mean, geom = "errorbar", 
                  aes(ymax = after_stat(y), ymin = after_stat(y)), 
-                 width = 0.4, linewidth = 0.8, color = "black", 
-                 position = position_dodge(0.8)) +
+                 width = 0.6, linewidth = 0.5, color = "black", linetype = "dashed",
+                 position = position_dodge(0.8), show.legend = FALSE) +
+    
+    # Small black diamond exactly in the middle of the mean line (with show.legend = FALSE)
+    stat_summary(fun = mean, geom = "point", 
+                 shape = 18, size = 3, color = "black", 
+                 position = position_dodge(0.8), show.legend = FALSE) +
+                 
+    # NEW: Faint filled violin with NO border outlines (inherits fill=group from main ggplot)
+    geom_violin(color = NA, position = position_dodge(0.8), alpha = 0.2) +
     
     geom_bracket(
       data = p_values, 
@@ -104,9 +111,8 @@ generate_feature_plot <- function(df, feature_name, save_path = NULL) {
     scale_fill_manual(values = cb_palette) +
     scale_color_manual(values = cb_palette) +
     
-    labs(title = paste(clean_title, "by Stimulus"),
-         subtitle = "P-values calculated via Satterthwaite's method",
-         y = clean_title, x = "") +
+    labs(title = "Latency of Peak in Transients in Stimuli-Responsive Neurons",
+         y = "Latency [s]", x = "") +
     
     theme(
       plot.title = element_text(hjust = 0.5, face = "bold"),  
@@ -129,8 +135,10 @@ df <- read.csv("/home/jaschneider/projects/DRG-CaSeg/DRG-CaSeg/DRG-CaSeg/bio_ana
 df$group <- as.factor(df$group)
 df$sample_id <- as.factor(df$sample_id)
 
+feature_name <- "peak_time"
+default_path <- "/home/jaschneider/projects/DRG-CaSeg/bio_analysis_plots/r_plots/xxfeaturexx_plot.png"
 plot_gradient <- generate_feature_plot(
   df = df, 
-  feature_name = "max_height", 
-  save_path = "/home/jaschneider/projects/DRG-CaSeg/DRG-CaSeg/DRG-CaSeg/bio_analysis/max_height_plot.png"
+  feature_name = feature_name, 
+  save_path = str_replace(default_path, "xxfeaturexx", feature_name)
 )
