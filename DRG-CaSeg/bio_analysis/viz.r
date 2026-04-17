@@ -170,12 +170,27 @@ plot_sample_correlations <- function(df, save_path = NULL) {
       # Clean prefixes
       stimulus_name = str_replace(stimulus_name, "sample_corr_", ""),
       stimulus_name = str_replace(stimulus_name, "stimulus_corr_", ""),
-      # Replace underscores and convert to Title Case
-      stimulus_name = str_to_title(str_replace_all(stimulus_name, "_", " "))
+      stimulus_name = str_replace(stimulus_name, "stimulus_", ""), # Catch extra prefixes if present
+      
+      # Replace underscores with spaces
+      stimulus_name = str_replace_all(stimulus_name, "_", " "),
+      
+      # Capitalize ONLY the first letter so scientific units like "nM" and "mM" are preserved
+      stimulus_name = paste0(toupper(substr(stimulus_name, 1, 1)), substr(stimulus_name, 2, nchar(stimulus_name)))
     ) %>%
-    drop_na(correlation_value) %>%
-    # Convert to factor to lock the plotting order
-    mutate(stimulus_name = as.factor(stimulus_name))
+    drop_na(correlation_value)
+  
+  # --- 3.5 Explicitly Define Plotting Order ---
+  # Identify levels to force Global first, then Capsaicin, then KCl
+  all_levels <- unique(df_long$stimulus_name)
+  lvl_global <- grep("Global", all_levels, ignore.case = TRUE, value = TRUE)
+  lvl_cap    <- grep("Capsaicin", all_levels, ignore.case = TRUE, value = TRUE)
+  lvl_kcl    <- grep("KCl", all_levels, ignore.case = TRUE, value = TRUE)
+  lvl_other  <- setdiff(all_levels, c(lvl_global, lvl_cap, lvl_kcl))
+  
+  # Apply ordered factor
+  df_long <- df_long %>%
+    mutate(stimulus_name = factor(stimulus_name, levels = c(lvl_global, lvl_cap, lvl_kcl, lvl_other)))
   
   # --- 4. Calculate Sample Sizes (n) ---
   n_data <- df_long %>%
@@ -257,9 +272,8 @@ plot_sample_correlations <- function(df, save_path = NULL) {
     scale_fill_manual(values = cb_palette) +
     scale_color_manual(values = cb_palette) +
     
-    labs(title = str_wrap("Mean Sample Correlation by Stimulus Region", width = 60),
-         subtitle = "P-values calculated via standard Linear Models",
-         y = "Correlation Value", x = "Stimulus Region") +
+    labs(title = str_wrap("Mean Neuronal Activity Correlation by Stimulus Region", width = 60),
+         y = "Person Correlation Coefficient", x = "Stimulus Region") +
     
     theme(
       plot.title = element_text(hjust = 0.5, face = "bold"),  
@@ -268,7 +282,8 @@ plot_sample_correlations <- function(df, save_path = NULL) {
       axis.line = element_line(linewidth = 0.8, color = "black"), 
       axis.ticks = element_line(linewidth = 0.8, color = "black") 
     ) +
-    coord_cartesian(clip = "off")
+    # Fixed the lower ylim to 0
+    coord_cartesian(ylim = c(0, NA), clip = "off")
   
   # --- 7. Save and Return ---
   if (!is.null(save_path)) {
@@ -278,6 +293,103 @@ plot_sample_correlations <- function(df, save_path = NULL) {
   return(p)
 }
 
+plot_responder_proportions <- function(df, save_path = NULL) {
+  
+  # --- 1. Identify Target Columns ---
+  target_cols <- c("stimulus_capsaicin_100nM_has_peak", 
+                   "stimulus_KCl_50mM_has_peak", 
+                   "stimulus_KCl_75mM_has_peak")
+  
+  if(!all(target_cols %in% names(df))) {
+    stop("One or more target 'has_peak' columns were not found in the dataframe.")
+  }
+  
+  # --- 2. Melt to Long Format and Clean Labels ---
+  df_long <- df %>%
+    select(sample_id, group, all_of(target_cols)) %>%
+    pivot_longer(
+      cols = all_of(target_cols),
+      names_to = "stimulus", 
+      values_to = "responded"
+    ) %>%
+    mutate(
+      # Safely convert Python string booleans ("True"/"False") or numbers to R numerics (1/0)
+      responded = case_when(
+        toupper(as.character(responded)) %in% c("TRUE", "T", "1", "1.0") ~ 1,
+        toupper(as.character(responded)) %in% c("FALSE", "F", "0", "0.0") ~ 0,
+        TRUE ~ NA_real_
+      ),
+      
+      # Clean the prefix and suffix
+      stimulus = str_replace(stimulus, "stimulus_", ""),
+      stimulus = str_replace(stimulus, "_has_peak", ""),
+      
+      # Replace underscores with spaces
+      stimulus = str_replace_all(stimulus, "_", " "),
+      
+      # Capitalize Capaicin 
+      stimulus = str_replace(stimulus, "capsaicin", "Capsaicin")
+    ) %>%
+    drop_na(responded) %>%
+    # Lock the plotting order factor
+    mutate(stimulus = factor(stimulus, levels = c("Capsaicin 100nM", "KCl 50mM", "KCl 75mM")))
+  
+  # --- 3. Calculate Sample Sizes (n) for the Legend ---
+  # Retaining the exact n_count = n() calculation, keeping the max per group 
+  # to ensure the legend displays one clean label per group
+  legend_n <- df_long %>%
+    group_by(stimulus, group) %>%
+    summarize(n_count = n(), .groups = "drop") %>%
+    group_by(group) %>%
+    summarize(final_n = max(n_count), .groups = "drop")
+    
+  df_long <- df_long %>%
+    left_join(legend_n, by = "group") %>%
+    mutate(group_legend = paste0(group, " (n=", final_n, ")")) %>%
+    mutate(group_legend = factor(group_legend, levels = unique(group_legend)))
+  
+  # --- 4. Build the Plot ---
+  cb_palette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+  
+  p <- ggplot(df_long, aes(x = stimulus, y = responded, fill = group_legend)) +
+    
+    # Grouped Bar Plot representing the mean (Proportion)
+    stat_summary(fun = mean, geom = "bar", 
+                 position = position_dodge(0.8), width = 0.8, 
+                 color = "black", linewidth = 0.5) +
+    
+    # Error bars representing the Standard Error (SE)
+    stat_summary(fun.data = mean_se, geom = "errorbar", 
+                 position = position_dodge(0.8), width = 0.2, 
+                 color = "black", linewidth = 0.8) +
+    
+    # Aesthetics
+    theme_classic() +
+    scale_fill_manual(values = cb_palette) +
+    
+    # Format Y-axis as percentages
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1), 
+                       expand = expansion(mult = c(0, 0))) + 
+    
+    labs(title = "Proportion of Responding Neurons by Stimulus",
+         y = "Proportion of Responders", x = "Stimulus Condition", fill = "group") +
+    
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold"),  
+      panel.grid.major.y = element_line(color = "grey90", linewidth = 0.5), 
+      axis.line = element_line(linewidth = 0.8, color = "black"), 
+      axis.ticks = element_line(linewidth = 0.8, color = "black") 
+    ) +
+    # Fix the limits strictly to 0 and 1 (100%)
+    coord_cartesian(ylim = c(0, 1), clip = "off")
+  
+  # --- 5. Save and Return ---
+  if (!is.null(save_path)) {
+    ggsave(save_path, plot = p, width = 8, height = 6, dpi = 300)
+  }
+  
+  return(p)
+}
 
 df <- read.csv("/home/jaschneider/projects/DRG-CaSeg/DRG-CaSeg/DRG-CaSeg/bio_analysis/trace_features.csv")
 df$group <- as.factor(df$group)
@@ -287,10 +399,15 @@ df$sample_id <- as.factor(df$sample_id)
 feature_name <- "max_gradient"
 default_path <- "/home/jaschneider/projects/DRG-CaSeg/bio_analysis_plots/r_plots/xxfeaturexx_plot.png"
 
-corr_plot <- plot_sample_correlations(
+responder_proportion_plot <- plot_responder_proportions(
   df = df, 
-  save_path = "/home/jaschneider/projects/DRG-CaSeg/bio_analysis_plots/r_plots/sample_correlation_plot.png"
+  save_path = "/home/jaschneider/projects/DRG-CaSeg/bio_analysis_plots/r_plots/responder_proportion_plot.png"
 )
+
+#corr_plot <- plot_sample_correlations(
+#  df = df, 
+#  save_path = "/home/jaschneider/projects/DRG-CaSeg/bio_analysis_plots/r_plots/sample_correlation_plot.png"
+#)
 
 #plot_gradient <- generate_feature_plot(
 #  df = df, 
