@@ -156,6 +156,8 @@ plot_sample_correlations <- function(df, save_path = NULL) {
   # --- 2. Collapse to Sample-Level ---
   # Assuming you want the mean correlation per sample per group
   df_sample <- df %>%
+    # TWEAK 3: Changed "treatment" to "Treatment"
+    mutate(group = str_replace(as.character(group), "Cytokine", "Treatment")) %>%
     group_by(sample_id, group) %>%
     summarize(across(all_of(sync_cols), ~ mean(.x, na.rm = TRUE)), .groups = "drop")
   
@@ -192,7 +194,7 @@ plot_sample_correlations <- function(df, save_path = NULL) {
   df_long <- df_long %>%
     mutate(stimulus_name = factor(stimulus_name, levels = c(lvl_global, lvl_cap, lvl_kcl, lvl_other)))
   
-  # --- 4. Calculate Sample Sizes (n) ---
+  # --- 4. Calculate Sample Sizes (N) ---
   n_data <- df_long %>%
     group_by(stimulus_name, group) %>%
     summarize(n_count = n(), .groups = "drop") %>%
@@ -256,6 +258,7 @@ plot_sample_correlations <- function(df, save_path = NULL) {
       color = NA, position = position_dodge(0.8), alpha = 0.2
     ) +
     
+    # TWEAK 4: Enforced fontface = "bold" for the p-value labels
     geom_bracket(
       data = p_values, 
       aes(xmin = x_min, xmax = x_max, label = p_label, y.position = y_pos), 
@@ -264,30 +267,48 @@ plot_sample_correlations <- function(df, save_path = NULL) {
     
     geom_text(
       data = n_data, 
-      aes(x = stimulus_name, y = y_pos, label = paste0("n=", n_count), group = group), 
-      inherit.aes = FALSE, position = position_dodge(0.8), size = 3.5, color = "grey30"
+      aes(x = stimulus_name, y = y_pos, label = paste0("N=", n_count), group = group), 
+      inherit.aes = FALSE, position = position_dodge(0.8), size = 4.5, color = "grey30"
     ) +
     
-    theme_classic() +
+    theme_classic(base_size = 14) +
     scale_fill_manual(values = cb_palette) +
     scale_color_manual(values = cb_palette) +
     
     labs(title = str_wrap("Mean Neuronal Activity Correlation by Stimulus Region", width = 60),
-         y = "Person Correlation Coefficient", x = "Stimulus Region") +
+         y = "Pearson Correlation Coefficient", x = "Stimulus Region") +
     
     theme(
-      plot.title = element_text(hjust = 0.5, face = "bold"),  
-      plot.subtitle = element_text(hjust = 0.5),              
+      # TWEAK 5: Added left margin (l = 20) to nudge the title to the right
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 22, margin = margin(t = 15, b = 15, l = 20)),  
+      plot.subtitle = element_text(hjust = 0.5),
+      
+      plot.margin = margin(t = 5, r = 10, b = 5, l = 5),
+      
       panel.grid.major.y = element_line(color = "grey90", linewidth = 0.5), 
+      
+      axis.title.y = element_text(face = "bold", size = 16, margin = margin(r = 15)),
+      
+      # TWEAK 1: Removed face = "bold" so y-axis ticks and labels are normal weight
+      axis.text.y = element_text(size = 12, color = "black"),
+      
+      axis.title.x = element_text(face = "bold", size = 16, margin = margin(t = 15)),
+      axis.text.x = element_text(size = rel(1.2), color = "black"),
+      
       axis.line = element_line(linewidth = 0.8, color = "black"), 
-      axis.ticks = element_line(linewidth = 0.8, color = "black") 
+      axis.ticks = element_line(linewidth = 0.8, color = "black"),
+      
+      legend.text = element_text(size = 12),
+      
+      # TWEAK 2: Removed face = "bold" from the legend heading
+      legend.title = element_text(size = 14)
     ) +
     # Fixed the lower ylim to 0
     coord_cartesian(ylim = c(0, NA), clip = "off")
   
   # --- 7. Save and Return ---
   if (!is.null(save_path)) {
-    ggsave(save_path, plot = p, width = 8, height = 6, dpi = 300)
+    ggsave(save_path, plot = p, width = 10, height = 8, dpi = 300)
   }
   
   return(p)
@@ -504,10 +525,10 @@ responder_proportion_plot <- plot_responder_proportions(
   save_path = "/home/jaschneider/projects/DRG-CaSeg/bio_analysis_plots/r_plots/responder_proportion_plot.png"
 )
 
-#corr_plot <- plot_sample_correlations(
-#  df = df, 
-#  save_path = "/home/jaschneider/projects/DRG-CaSeg/bio_analysis_plots/r_plots/sample_correlation_plot.png"
-#)
+corr_plot <- plot_sample_correlations(
+  df = df, 
+  save_path = "/home/jaschneider/projects/DRG-CaSeg/bio_analysis_plots/r_plots/sample_correlation_plot.png"
+)
 
 #plot_gradient <- generate_feature_plot(
 #  df = df, 
