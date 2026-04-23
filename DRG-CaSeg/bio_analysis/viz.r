@@ -307,85 +307,185 @@ plot_responder_proportions <- function(df, save_path = NULL) {
   # --- 2. Melt to Long Format and Clean Labels ---
   df_long <- df %>%
     select(sample_id, group, all_of(target_cols)) %>%
+    mutate(group = str_replace(as.character(group), "Cytokine", "Treatment")) %>%
     pivot_longer(
       cols = all_of(target_cols),
       names_to = "stimulus", 
       values_to = "responded"
     ) %>%
     mutate(
-      # Safely convert Python string booleans ("True"/"False") or numbers to R numerics (1/0)
       responded = case_when(
         toupper(as.character(responded)) %in% c("TRUE", "T", "1", "1.0") ~ 1,
         toupper(as.character(responded)) %in% c("FALSE", "F", "0", "0.0") ~ 0,
         TRUE ~ NA_real_
       ),
-      
-      # Clean the prefix and suffix
+      Status = ifelse(responded == 1, "Responder", "NonResponder"),
       stimulus = str_replace(stimulus, "stimulus_", ""),
       stimulus = str_replace(stimulus, "_has_peak", ""),
-      
-      # Replace underscores with spaces
       stimulus = str_replace_all(stimulus, "_", " "),
-      
-      # Capitalize Capaicin 
       stimulus = str_replace(stimulus, "capsaicin", "Capsaicin")
     ) %>%
     drop_na(responded) %>%
-    # Lock the plotting order factor
     mutate(stimulus = factor(stimulus, levels = c("Capsaicin 100nM", "KCl 50mM", "KCl 75mM")))
   
-  # --- 3. Calculate Sample Sizes (n) for the Legend ---
-  # Retaining the exact n_count = n() calculation, keeping the max per group 
-  # to ensure the legend displays one clean label per group
+  # --- 3. Calculate Global N for Control and Treatment ---
   legend_n <- df_long %>%
     group_by(stimulus, group) %>%
     summarize(n_count = n(), .groups = "drop") %>%
     group_by(group) %>%
     summarize(final_n = max(n_count), .groups = "drop")
+  
+  control_n <- legend_n$final_n[legend_n$group == "Control"]
+  treatment_n <- legend_n$final_n[legend_n$group == "Treatment"]
+  
+  # --- 3.5 Calculate Polygons for Vertical Floating Circles ---
+  df_pie <- df_long %>%
+    group_by(stimulus, group) %>%
+    summarize(
+      Responder = sum(responded == 1, na.rm = TRUE),
+      Total = n(),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      Prop_Responder = Responder / Total,
+      x_center = as.numeric(stimulus),
+      y_center = ifelse(group == "Control", 1.8, 0.2),
+      radius = 0.40 
+    )
+  
+  poly_list <- lapply(1:nrow(df_pie), function(i) {
+    row <- df_pie[i, ]
+    angle_resp <- 2 * pi * row$Prop_Responder
     
-  df_long <- df_long %>%
-    left_join(legend_n, by = "group") %>%
-    mutate(group_legend = paste0(group, " (n=", final_n, ")")) %>%
-    mutate(group_legend = factor(group_legend, levels = unique(group_legend)))
+    # Responder slice (Left side)
+    theta_resp <- seq(pi/2, pi/2 + angle_resp, length.out = max(10, round(100 * row$Prop_Responder)))
+    poly_resp <- data.frame(
+      x = c(row$x_center, row$x_center + row$radius * cos(theta_resp)),
+      y = c(row$y_center, row$y_center + row$radius * sin(theta_resp)),
+      Status = paste0(row$group, "_Responder"),
+      poly_id = paste0(row$stimulus, "_", row$group, "_Responder")
+    )
+    
+    # Non-Responder slice (Right side)
+    theta_nonresp <- seq(pi/2 + angle_resp, pi/2 + 2*pi, length.out = max(10, round(100 * (1 - row$Prop_Responder))))
+    poly_nonresp <- data.frame(
+      x = c(row$x_center, row$x_center + row$radius * cos(theta_nonresp)),
+      y = c(row$y_center, row$y_center + row$radius * sin(theta_nonresp)),
+      Status = paste0(row$group, "_NonResponder"),
+      poly_id = paste0(row$stimulus, "_", row$group, "_NonResponder")
+    )
+    
+    res <- data.frame()
+    if(row$Prop_Responder > 0) res <- rbind(res, poly_resp)
+    if(row$Prop_Responder < 1) res <- rbind(res, poly_nonresp)
+    return(res)
+  })
+  df_polygons <- bind_rows(poly_list)
+  
+  df_text <- bind_rows(
+    df_pie %>% filter(Prop_Responder > 0) %>%
+      mutate(
+        mid_angle = pi/2 + (2 * pi * Prop_Responder) / 2,
+        x_text = x_center + (radius * 0.52) * cos(mid_angle),
+        y_text = y_center + (radius * 0.52) * sin(mid_angle),
+        Label = scales::percent(Prop_Responder, accuracy = 1)
+      ),
+    df_pie %>% filter(Prop_Responder < 1) %>%
+      mutate(
+        angle_resp = 2 * pi * Prop_Responder,
+        mid_angle = pi/2 + angle_resp + (2 * pi - angle_resp) / 2,
+        x_text = x_center + (radius * 0.52) * cos(mid_angle),
+        y_text = y_center + (radius * 0.52) * sin(mid_angle),
+        Label = scales::percent(1 - Prop_Responder, accuracy = 1)
+      )
+  )
+  
+  # --- 3.7 Custom Legend Coordinates ---
+  num_stim <- length(levels(df_long$stimulus))
+  x_leg_box <- num_stim + 0.70 
+  x_leg_txt <- num_stim + 0.775 
+  
+  df_legend <- data.frame(
+    x_box = c(x_leg_box, x_leg_box, x_leg_box, x_leg_box),
+    y_box = c(1.85, 1.75, 0.25, 0.15),
+    x_text = c(x_leg_txt, x_leg_txt, x_leg_txt, x_leg_txt),
+    y_text = c(1.85, 1.75, 0.25, 0.15),
+    Status = c("Control_Responder", "Control_NonResponder", "Treatment_Responder", "Treatment_NonResponder"),
+    Label = c("Responder", "Non-Responder", "Responder", "Non-Responder")
+  )
   
   # --- 4. Build the Plot ---
-  cb_palette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+  custom_colors <- c(
+    "Control_Responder" = "#0072B2",      
+    "Control_NonResponder" = "#56B4E9",   
+    "Treatment_Responder" = "#D55E00",    
+    "Treatment_NonResponder" = "#E69F00"  
+  )
   
-  p <- ggplot(df_long, aes(x = stimulus, y = responded, fill = group_legend)) +
+  p <- ggplot() +
+    geom_polygon(data = df_polygons, aes(x = x, y = y, fill = Status, group = poly_id), 
+                 color = "black", linewidth = 0.5, show.legend = FALSE) +
     
-    # Grouped Bar Plot representing the mean (Proportion)
-    stat_summary(fun = mean, geom = "bar", 
-                 position = position_dodge(0.8), width = 0.8, 
-                 color = "black", linewidth = 0.5) +
+    geom_text(data = df_text, aes(x = x_text, y = y_text, label = Label),
+              color = "white", size = 4.5, fontface = "bold", show.legend = FALSE) +
+              
+    geom_point(data = df_legend, aes(x = x_box, y = y_box, fill = Status), 
+               shape = 22, size = 6, color = "black", stroke = 0.5, show.legend = FALSE) +
     
-    # Error bars representing the Standard Error (SE)
-    stat_summary(fun.data = mean_se, geom = "errorbar", 
-                 position = position_dodge(0.8), width = 0.2, 
-                 color = "black", linewidth = 0.8) +
-    
-    # Aesthetics
-    theme_classic() +
-    scale_fill_manual(values = cb_palette) +
-    
-    # Format Y-axis as percentages
-    scale_y_continuous(labels = scales::percent_format(accuracy = 1), 
-                       expand = expansion(mult = c(0, 0))) + 
-    
-    labs(title = "Proportion of Responding Neurons by Stimulus",
-         y = "Proportion of Responders", x = "Stimulus Condition", fill = "group") +
-    
-    theme(
-      plot.title = element_text(hjust = 0.5, face = "bold"),  
-      panel.grid.major.y = element_line(color = "grey90", linewidth = 0.5), 
-      axis.line = element_line(linewidth = 0.8, color = "black"), 
-      axis.ticks = element_line(linewidth = 0.8, color = "black") 
+    geom_text(data = df_legend, aes(x = x_text, y = y_text, label = Label), 
+              hjust = 0, size = 4.5, show.legend = FALSE) +
+              
+    coord_fixed(
+      ratio = 1, 
+      xlim = c(0.5, num_stim + 0.5), 
+      # TWEAK: Expanded lower y-limit to -0.8 to push the X-axis line further down
+      ylim = c(-0.8, 2.4), 
+      clip = "off"
     ) +
-    # Fix the limits strictly to 0 and 1 (100%)
-    coord_cartesian(ylim = c(0, 1), clip = "off")
-  
+    
+    scale_fill_manual(values = custom_colors) +
+    
+    scale_x_continuous(
+      breaks = 1:num_stim,
+      labels = levels(df_long$stimulus),
+      expand = c(0, 0)
+    ) +
+    
+    scale_y_continuous(
+      breaks = c(0.2, 1.8),
+      labels = c(paste0("Treatment\n(N=", treatment_n, ")"), paste0("Control\n(N=", control_n, ")")),
+      expand = c(0, 0)
+    ) +
+    
+    theme_classic(base_size = 14) +
+    labs(
+      title = "Proportion of Responding Neurons by Stimulus",
+      x = "Stimulus Condition",
+      fill = NULL 
+    ) +
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 22, margin = margin(t = 15, b = 15)),
+      
+      # TWEAK: Increased top margin (t = 25) to protect the large title
+      plot.margin = margin(t = 5, r = 100, b = 5, l = 5),
+      
+      axis.title.y = element_blank(),
+      axis.text.y = element_text(size = 12, face = "bold", color = "black"),
+      axis.ticks.y = element_blank(),
+      axis.line.y = element_blank(),
+      
+      axis.line.x = element_line(linewidth = 0.8, color = "black"), 
+      axis.ticks.x = element_line(linewidth = 0.8, color = "black"),
+      axis.text.x = element_text(size = rel(1.2), color = "black"),
+      axis.title.x = element_text(face = "bold", size = 16, margin = margin(t = 15)),
+      
+      legend.position = "none"
+    )
+    
   # --- 5. Save and Return ---
   if (!is.null(save_path)) {
-    ggsave(save_path, plot = p, width = 8, height = 6, dpi = 300)
+    # TWEAK: Set figure output to 10x8 for better proportions
+    ggsave(save_path, plot = p, width = 10, height = 8, dpi = 300)
   }
   
   return(p)

@@ -2,8 +2,12 @@ import attrs
 import numpy as np
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
+import matplotlib.gridspec as gridspec
 
 from scipy.ndimage import binary_erosion, affine_transform
+from skimage.measure import find_contours
+from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from pathlib import Path
 
 import data_utils.ops as ops
@@ -108,6 +112,8 @@ class DRGtissueModel:
     activities = attrs.field(init=False, default=None)
     labels = attrs.field(init=False, default=None)
     background = attrs.field(init=False, default=None)
+    noisy_activities = attrs.field(init=False, default=None)
+    summary_image = attrs.field(init=False, default=None)
     
     # Storage for the abstract definition of cells (allows moving them later)
     cell_metadata: list[dict[str, any]] = attrs.field(init=False, factory=list)
@@ -126,6 +132,7 @@ class DRGtissueModel:
 
     def render_video(
         self,
+        store_traces: bool,
         ) -> np.ndarray:
         """Renders the final synthetic video by combining spatial footprints, 
         temporal activities, and background noise.
@@ -180,6 +187,10 @@ class DRGtissueModel:
                 video_norm,
                 self.full_well_capacity
             )
+
+        self.summary_image = np.percentile(video_norm, 98, axis=0)
+        if store_traces:
+            self._extract_noisy_traces(video_norm)
 
         return video_norm
 
@@ -643,86 +654,126 @@ class DRGtissueModel:
         ):
         """Saves a 2D visualization of all cellular structures.
 
-        This method generates a single RGB image by rendering each spatial
-        footprint from `self.footprints` with a unique color. The components
-        are drawn sequentially on top of a base image.
-
-        The base image is determined by `self.background`. If `self.background`
-        is not a valid 2D numpy array a solid gray background is created using
-        the `self.background_brightness` attribute.
-
-        This method relies on the following instance attributes being set:
-            - self.footprints (np.ndarray): A 3D array of shape
-                (n_components, height, width).
-            - self.height_px (int): The image height.
-            - self.width_px (int): The image width.
-            - self.background (np.ndarray, optional): A 2D array for the
-                background.
-            - self.background_brightness (float, fallback): Used if
-                `self.background` is absent or invalid.
+        This method generates a spatial map by rendering the contours of each 
+        spatial footprint from `self.footprints` with a unique color over a 
+        contrast-stretched base image. It also renders ground truth cells in 
+        grayscale if the `gt_footprints` attribute is present.
 
         Args:
-            save_loc (Path | str): The file path (e.g., "path/to/image.png")
-                where the resulting plot will be saved.
+            save_loc (Path | str): The file path where the plot will be saved.
+            dpi (int): Resolution of the saved figure.
 
         Returns:
-            matplotlib.figure.Figure: The Figure object for the plot. Note that
-                the figure is closed (plt.close(fig)) immediately after saving.
+            matplotlib.figure.Figure: The closed Figure object for the plot.
         """
-        
         if not hasattr(self, "footprints") or self.footprints is None:
             logger.warning("Footprints not found. Please create cellular structures first.")
             return
 
         num_components = self.footprints.shape[0]
+        img_h = self.height_px
+        img_w = self.width_px
+        img_aspect = img_h / img_w
 
-        if hasattr(self, "background") and isinstance(self.background, np.ndarray) and self.background.shape == (self.height_px, self.width_px):
-            base_image = self.background.astype(np.float32) / 255.0
+        if hasattr(self, "summary_image") and isinstance(self.summary_image, np.ndarray) and self.summary_image.shape == (img_h, img_w):
+            background_img = self.summary_image
         else:
-            logger.warning(f"`self.background` attribute not found or invalid. "
-                           f"Creating a new background with base brightness  "
-                           f"{self.background_brightness}.")
-            base_image = self.generate_static_background()
-
-        colored_image = np.stack([base_image, base_image, base_image], axis=-1)
+            logger.warning(
+                f"`self.summary` attribute not found or invalid. "
+                f"Creating a new rendering "
+                f"{self.background_brightness}."
+            )
+            self.render_video()
+            background_img = self.summary_image
 
         if num_components <= 10:
-            colors = cm.get_cmap("tab10", num_components)
+            colors = cm.get_cmap("tab10")(np.linspace(0, 1, num_components))
         elif num_components <= 20:
-            colors = cm.get_cmap("tab20", num_components)
+            colors = cm.get_cmap("tab20")(np.linspace(0, 1, num_components))
         else:
-            colors = cm.get_cmap("nipy_spectral", num_components) 
-            
+            colors = cm.get_cmap("nipy_spectral")(np.linspace(0, 1, num_components))
+
+        fig_spatial = plt.figure(figsize=(10, 10 * img_aspect), dpi=300)
+        ax_map = fig_spatial.add_subplot(111)
+        
+        fig_spatial.suptitle("Ground Truth Spatial Layout", fontsize=20, fontweight="bold")
+
+        # Robust contrast stretching
+        vmin, vmax = np.percentile(background_img, [1, 99])
+        ax_map.imshow(background_img, cmap="gray", vmin=vmin, vmax=vmax, interpolation="bilinear")
 
         for i in range(num_components):
             footprint = self.footprints[i]
-            max_val = footprint.max()
-            if max_val > 0:
-                normalized_footprint = footprint / max_val
-            else:
-                normalized_footprint = footprint
             
-            component_color = np.array(colors(i))[0:3]
-            footprint_3d = normalized_footprint[:, :, np.newaxis]
-            colored_image = colored_image * (1 - footprint_3d) + component_color * footprint_3d
+            contours = find_contours(footprint, 0.5)
+            if not contours:
+                continue
 
-        colored_image = np.clip(colored_image, 0, 1)
+            largest_contour_idx = -1
+            max_len = 0
+            for c_idx, c in enumerate(contours):
+                if len(c) > max_len:
+                    max_len = len(c)
+                    largest_contour_idx = c_idx
 
-        aspect_ratio = self.height_px / self.width_px
-        fig_width = 10 
-        fig_height = fig_width * aspect_ratio
+            for c_idx, contour in enumerate(contours):
+                ax_map.plot(contour[:, 1], contour[:, 0], linewidth=1.2, color=colors[i])
+                
+                if c_idx == largest_contour_idx:
+                    ys, xs = contour[:, 0], contour[:, 1]
+                    min_y, max_y = np.argmin(ys), np.argmax(ys)
+                    min_x, max_x = np.argmin(xs), np.argmax(xs)
+                    candidates = [
+                        (ys[min_y], xs[min_y], "bottom", "center"),
+                        (ys[max_y], xs[max_y], "top", "center"),   
+                        (ys[min_x], xs[min_x], "center", "right"), 
+                        (ys[max_x], xs[max_x], "center", "left")   
+                    ]
+                    np.random.shuffle(candidates)
+                    final_pos = candidates[0]
+                    margin = img_h * 0.05    
 
-        fig = plt.figure(figsize=(fig_width, fig_height))
-        ax = fig.add_subplot(1, 1, 1)
+                    for y, x, va, ha in candidates:
+                        if not (va == "bottom" and y < margin) and \
+                           not (va == "top" and y > (img_h - margin)) and \
+                           not (ha == "right" and x < margin) and \
+                           not (ha == "left" and x > (img_w - margin)):
+                            final_pos = (y, x, va, ha)
+                            break
 
-        ax.imshow(colored_image)
-        ax.set_title("Ground Truth Footprints")
+                    txt = ax_map.text(
+                        final_pos[1], final_pos[0], 
+                        str(i), 
+                        color=colors[i], 
+                        fontsize=9, 
+                        ha=final_pos[3], 
+                        va=final_pos[2], 
+                        fontweight="bold"
+                    )
+                    txt.set_path_effects([pe.withStroke(linewidth=2, foreground="white")])
 
-        fig.tight_layout()
-        fig.savefig(save_loc, dpi=300)
-        plt.close(fig) 
+        # Add scale bar to the plot if metadata is available on the instance
+        if hasattr(self, "um_per_pixel"):
+            bar_px = (100 / self.um_per_pixel)
+            scalebar = AnchoredSizeBar(
+                ax_map.transData, 
+                bar_px, 
+                "100 \u03bcm", 
+                "lower right", 
+                pad=0.5, 
+                color="white", 
+                frameon=False, 
+                size_vertical=2
+            )
+            ax_map.add_artist(scalebar)
+        
+        # Finish layout and save plot
+        ax_map.axis("off")
+        fig_spatial.tight_layout()
+        fig_spatial.savefig(save_loc, dpi=300, bbox_inches="tight")
+        plt.close(fig_spatial)
 
-        return fig
+        return fig_spatial
     
 
     def perturb_positions(
@@ -809,3 +860,130 @@ class DRGtissueModel:
 
         # FORCE REBUILD of footprints with new coordinates
         self.build_image()
+
+
+    def _extract_noisy_traces(self, video: np.ndarray):
+        """
+        Extracts temporal traces from the fully rendered video using the 
+        spatial footprints as extraction weights.
+        
+        Calculates the weighted average fluorescence for each ROI across all frames.
+        """
+        
+        # Get dimensions
+        T, H, W = video.shape
+        N = self.footprints.shape[0]
+        
+        # Reshape video and footprints for fast matrix multiplication
+        # video goes from (T, H, W) -> (T, H*W)
+        # footprints go from (N, H, W) -> (N, H*W)
+        flat_video = video.reshape(T, -1)
+        flat_footprints = self.footprints.reshape(N, -1)
+        
+        # Calculate the sum of weights for each footprint to normalize the output
+        # Shape becomes (N, 1)
+        weight_sums = flat_footprints.sum(axis=1, keepdims=True)
+        
+        # Safety check: avoid division by zero if a footprint is completely empty
+        weight_sums[weight_sums == 0] = 1.0 
+        
+        # Matrix multiplication: (N, H*W) @ (H*W, T) -> (N, T)
+        # Then divide by weight_sums to get the weighted average
+        raw_traces = (flat_footprints @ flat_video.T) / weight_sums
+        
+        # Store in the new attribute
+        self.noisy_activities = raw_traces
+
+    def plot_traces(
+        self,
+        save_loc: Path | str,
+        ):
+        """Plots the extracted noisy traces against the ground truth activities."""
+        if not hasattr(self, "noisy_activities") or self.noisy_activities is None:
+            logger.warning("Noisy traces not found. Run render_video with extract_noisy_traces=True.")
+            return
+
+        num_components = self.noisy_activities.shape[0]
+        max_rois = 100
+        num_trace_rois = min(num_components, max_rois)
+        
+        trace_subset = self.noisy_activities[:num_trace_rois]
+        gt_trace_subset = self.activities[:num_trace_rois] if self.activities is not None else None
+        
+        if num_components <= 10:
+            colors = cm.get_cmap("tab10")(np.linspace(0, 1, num_components))
+        elif num_components <= 20:
+            colors = cm.get_cmap("tab20")(np.linspace(0, 1, num_components))
+        else:
+            colors = cm.get_cmap("nipy_spectral")(np.linspace(0, 1, num_components))
+
+        height_per_roi = 0.5 
+        header_space = 2.0
+        trace_min_height = header_space + (num_trace_rois * height_per_roi)
+        fig_height = max(8.0, trace_min_height)
+
+        fig_temporal = plt.figure(figsize=(10, fig_height), dpi=300)
+        gs = gridspec.GridSpec(max(1, num_trace_rois), 1, figure=fig_temporal, hspace=0.5)
+        
+        title_y_pos = 1.0 - (0.3 / fig_height)
+        fig_temporal.suptitle("Temporal Activity", fontsize=20, fontweight="bold", y=title_y_pos)
+
+        time_seconds = np.arange(self.num_frames) / self.fps
+        axes_traces = []
+        
+        ax_first = fig_temporal.add_subplot(gs[0, 0])
+        axes_traces.append(ax_first)
+
+        for i in range(num_trace_rois):
+            if i == 0:
+                ax_trace = ax_first
+            else:
+                ax_trace = fig_temporal.add_subplot(gs[i, 0], sharex=ax_first)
+                axes_traces.append(ax_trace)
+            
+            trace_plot = trace_subset[i]
+            
+            if gt_trace_subset is not None:
+                # Scale the [0, 255] ground truth down to [0.0, 1.0] to match the video space
+                trace_plot_gt = gt_trace_subset[i] / 255.0
+            else:
+                trace_plot_gt = None
+            
+            if trace_plot_gt is not None:
+                ax_trace.plot(time_seconds, trace_plot_gt, color="#000000", linewidth=1.2)
+                
+            ax_trace.plot(time_seconds, trace_plot, color=colors[i], linewidth=1.2)
+            ax_trace.grid(True, linestyle="--", linewidth=0.5, color="#9e9b9b", alpha=0.5)
+            ax_trace.set_axisbelow(True)
+
+            ax_trace.text(0.01, 0.85, f"ROI {i}", transform=ax_trace.transAxes, fontsize=10, fontweight="bold", color="black")
+
+            ax_trace.yaxis.set_major_locator(plt.MaxNLocator(nbins=3, prune="both"))
+            ax_trace.tick_params(axis="y", labelsize=7)
+
+            ax_trace.spines["top"].set_visible(False)
+            ax_trace.spines["right"].set_visible(False)
+            
+            if i < num_trace_rois - 1:
+                ax_trace.tick_params(labelbottom=False, bottom=True) 
+                ax_trace.spines["bottom"].set_visible(True) 
+            else:
+                ax_trace.set_xlabel("Time (s)", fontsize=10)
+                ax_trace.tick_params(axis="x", labelsize=9)
+
+        ax_first.set_xlim(time_seconds[0], time_seconds[-1])
+        fig_temporal.align_ylabels(axes_traces)
+
+        # Apply the single unified Y-axis label here, explicitly setting x position to avoid overlap
+        fig_temporal.supylabel("Intensity [a.u.]", fontsize=12, fontweight="bold", x=0.02)
+
+        header_y = 1.0 - (0.8 / fig_height)
+        fig_temporal.text(0.5, header_y, "Raw Extracted vs Ground Truth Traces", fontsize=14, fontweight="bold", ha="center", va="top")
+
+        # Increased left margin from 0.05 to 0.08 to give the numbers more space
+        plt.subplots_adjust(top=1.0 - (1.2 / fig_height), bottom=0.05, left=0.08, right=0.95)
+
+        fig_temporal.savefig(save_loc, dpi=300, bbox_inches="tight")
+        plt.close(fig_temporal)
+        
+        return fig_temporal
