@@ -6,7 +6,7 @@ library(ggpubr)
 library(stringr)
 
 # Define the reusable function
-generate_feature_plot <- function(df, feature_name, save_path = NULL) {
+generate_feature_plot <- function(df, feature_name, plot_title, y_axis_label, p_within_group = FALSE, save_path = NULL) {
   
   # --- 1. Dynamically Construct Column Names ---
   col_cap <- paste0("stimulus_capsaicin_100nM_", feature_name)
@@ -19,16 +19,18 @@ generate_feature_plot <- function(df, feature_name, save_path = NULL) {
     stop("One or more generated column names were not found in the dataframe.")
   }
   
+  # Replace "Cytokine" with "Treatment" in the group column
+  df <- df %>%
+    mutate(group = str_replace(as.character(group), "Cytokine", "Treatment"))
+  
   # --- 1.5 CONDITIONAL TIME SHIFT ---
-  # If "time" is anywhere in the feature name (ignoring uppercase/lowercase), 
-  # subtract the specific baselines from the raw dataframe columns.
   if (grepl("time", feature_name, ignore.case = TRUE)) {
     df[[col_cap]]      <- df[[col_cap]] - 100
     df[[col_kcl_low]]  <- df[[col_kcl_low]] - 200
     df[[col_kcl_high]] <- df[[col_kcl_high]] - 300
   }
   
-  # --- 2. Dynamically Run LMMs ---
+  # --- 2. Dynamically Run LMMs (Between Groups) ---
   model_cap <- lmer(as.formula(paste0(col_cap, " ~ group + (1 | sample_id)")), data = df)
   model_kcl_low <- lmer(as.formula(paste0(col_kcl_low, " ~ group + (1 | sample_id)")), data = df)
   model_kcl_high <- lmer(as.formula(paste0(col_kcl_high, " ~ group + (1 | sample_id)")), data = df)
@@ -41,25 +43,27 @@ generate_feature_plot <- function(df, feature_name, save_path = NULL) {
     ) %>%
     mutate(stimulus = factor(stimulus, 
                              levels = req_cols,
-                             labels = c("Capsaicin 100nM", "KCl 50mM", "KCl 75mM"))) %>%
+                             labels = c("Capsaicin 100 nM", "KCl 50 mM", "KCl 75 mM"))) %>%
     drop_na(value)
   
-  # --- 4. Calculate Sample Sizes (n) ---
+  # --- 4. Calculate Sample Sizes (N) ---
+  max_val <- max(df_long$value, na.rm = TRUE)
+  min_val <- min(df_long$value, na.rm = TRUE)
+  y_range <- max_val - min_val
+  
   n_data <- df_long %>%
     group_by(stimulus, group) %>%
     summarize(n_count = n(), .groups = "drop") %>%
-    mutate(
-      y_pos = min(df_long$value, na.rm = TRUE) - 
-        (max(df_long$value, na.rm = TRUE) - min(df_long$value, na.rm = TRUE)) * 0.05
-    )
+    mutate(y_pos = min_val - (y_range * 0.05))
   
   # --- 5. Extract P-Values and Calculate Bracket Positions ---
   get_p <- function(model) {
     summary(model)$coefficients[2, "Pr(>|t|)"]
   }
   
+  # Standard Between-Group P-values
   p_values <- data.frame(
-    stimulus = c("Capsaicin 100nM", "KCl 50mM", "KCl 75mM"),
+    stimulus = c("Capsaicin 100 nM", "KCl 50 mM", "KCl 75 mM"),
     x_min = c(1 - 0.2, 2 - 0.2, 3 - 0.2), 
     x_max = c(1 + 0.2, 2 + 0.2, 3 + 0.2), 
     p_label = c(
@@ -67,13 +71,46 @@ generate_feature_plot <- function(df, feature_name, save_path = NULL) {
       paste0("p = ", round(get_p(model_kcl_low), 3)),
       paste0("p = ", round(get_p(model_kcl_high), 3))
     ),
-    y_pos = max(df_long$value, na.rm = TRUE) * 1.05 
+    y_pos = max_val + (y_range * 0.08) 
   )
+  
+  # --- 5.5 Within-Group P-Values ---
+  if (p_within_group) {
+    get_within_p <- function(grp, stim1, stim2) {
+      sub_df <- df_long %>% filter(group == grp, stimulus %in% c(stim1, stim2))
+      m <- lmer(value ~ stimulus + (1 | sample_id), data = sub_df)
+      summary(m)$coefficients[2, "Pr(>|t|)"]
+    }
+    
+    # Identify the two groups dynamically 
+    grp_levels <- levels(factor(df_long$group))
+    grp1 <- grp_levels[1] # Usually Control
+    grp2 <- grp_levels[2] # Usually Treatment
+    
+    p_within <- data.frame(
+      # Group 1 (Left dodge: integers - 0.2) | Group 2 (Right dodge: integers + 0.2)
+      # Coordinates map exactly to the center of the dodged points
+      x_min = c(0.8, 1.2, 1.8, 2.2),
+      x_max = c(1.8, 2.2, 2.8, 3.2),
+      # Stagger the heights significantly so the horizontal lines never intersect
+      y_pos = c(
+        max_val + (y_range * 0.16), 
+        max_val + (y_range * 0.24), 
+        max_val + (y_range * 0.32), 
+        max_val + (y_range * 0.40)
+      )
+    )
+    
+    p_within$p_label <- c(
+      paste0("p = ", round(get_within_p(grp1, "Capsaicin 100 nM", "KCl 50 mM"), 3)),
+      paste0("p = ", round(get_within_p(grp2, "Capsaicin 100 nM", "KCl 50 mM"), 3)),
+      paste0("p = ", round(get_within_p(grp1, "KCl 50 mM", "KCl 75 mM"), 3)),
+      paste0("p = ", round(get_within_p(grp2, "KCl 50 mM", "KCl 75 mM"), 3))
+    )
+  }
   
   # --- 6. Build the Plot ---
   cb_palette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
-  
-  clean_title <- str_to_title(gsub("_", " ", feature_name))
   
   p <- ggplot(df_long, aes(x = stimulus, y = value, fill = group)) +
     
@@ -81,18 +118,15 @@ generate_feature_plot <- function(df, feature_name, save_path = NULL) {
                position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.8), 
                alpha = 0.6, size = 1.5) +
     
-    # Thin dashed black line indicating the mean (with show.legend = FALSE)
     stat_summary(fun = mean, geom = "errorbar", 
                  aes(ymax = after_stat(y), ymin = after_stat(y)), 
                  width = 0.6, linewidth = 0.5, color = "black", linetype = "dashed",
                  position = position_dodge(0.8), show.legend = FALSE) +
     
-    # Small black diamond exactly in the middle of the mean line (with show.legend = FALSE)
     stat_summary(fun = mean, geom = "point", 
                  shape = 18, size = 3, color = "black", 
                  position = position_dodge(0.8), show.legend = FALSE) +
                  
-    # MODIFIED: Faint filled violin that calculates its shape by ignoring outliers (1.5x IQR)
     geom_violin(
       data = function(d) {
         d %>%
@@ -108,42 +142,70 @@ generate_feature_plot <- function(df, feature_name, save_path = NULL) {
       color = NA, position = position_dodge(0.8), alpha = 0.2
     ) +
     
+    # Standard Between-Group Brackets
     geom_bracket(
       data = p_values, 
       aes(xmin = x_min, xmax = x_max, label = p_label, y.position = y_pos), 
       inherit.aes = FALSE, tip.length = 0.02, linewidth = 0.6, fontface = "bold"
-    ) +
+    )
     
+  # Add Within-Group Brackets if toggled
+  if (p_within_group) {
+    p <- p + geom_bracket(
+      data = p_within, 
+      aes(xmin = x_min, xmax = x_max, label = p_label, y.position = y_pos), 
+      inherit.aes = FALSE, tip.length = 0.02, linewidth = 0.6, fontface = "bold"
+    )
+  }
+  
+  p <- p + 
     geom_text(
       data = n_data, 
-      aes(x = stimulus, y = y_pos, label = paste0("n=", n_count), group = group), 
-      inherit.aes = FALSE, position = position_dodge(0.8), size = 3.5, color = "grey30"
+      aes(x = stimulus, y = y_pos, label = paste0("N=", n_count), group = group), 
+      inherit.aes = FALSE, position = position_dodge(0.8), size = 4.5, color = "grey30"
     ) +
     
-    theme_classic() +
+    theme_classic(base_size = 14) +
     scale_fill_manual(values = cb_palette) +
     scale_color_manual(values = cb_palette) +
     
-    labs(title = str_wrap("Maximum Ascending Gradient in Stimulus-Responsive Neurons", width = 60),
-         y = "Maximum Gradient [z-score/s]", x = "") +
+    # Applied dynamic title mapping and explicitly assigned the X and Y axes 
+    labs(
+      title = str_wrap(plot_title, width = 45),
+      y = y_axis_label, 
+      x = "Stimulus Region"
+    ) +
     
     theme(
-      plot.title = element_text(hjust = 0.5, face = "bold"),  
-      plot.subtitle = element_text(hjust = 0.5),              
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 22, margin = margin(t = 15, b = 15, l = 30)),  
+      plot.subtitle = element_text(hjust = 0.5),
+      
+      # Adjusted t = 5 to exactly match the reference function
+      plot.margin = margin(t = 5, r = 10, b = 5, l = 5),
+      
       panel.grid.major.y = element_line(color = "grey90", linewidth = 0.5), 
+      
+      axis.title.y = element_text(face = "bold", size = 16, margin = margin(r = 15)),
+      axis.text.y = element_text(size = 12, color = "black"),
+      
+      axis.title.x = element_text(face = "bold", size = 16, margin = margin(t = 15)),
+      axis.text.x = element_text(size = rel(1.2), color = "black"),
+      
       axis.line = element_line(linewidth = 0.8, color = "black"), 
-      axis.ticks = element_line(linewidth = 0.8, color = "black") 
+      axis.ticks = element_line(linewidth = 0.8, color = "black"),
+      
+      legend.text = element_text(size = 12),
+      legend.title = element_text(size = 14)
     ) +
     coord_cartesian(clip = "off")
   
   # --- 7. Save and Return ---
   if (!is.null(save_path)) {
-    ggsave(save_path, plot = p, width = 8, height = 6, dpi = 300)
+    ggsave(save_path, plot = p, width = 10, height = 8, dpi = 300)
   }
   
   return(p)
 }
-
 
 plot_sample_correlations <- function(df, save_path = NULL) {
   
@@ -530,8 +592,11 @@ corr_plot <- plot_sample_correlations(
   save_path = "/home/jaschneider/projects/DRG-CaSeg/bio_analysis_plots/r_plots/sample_correlation_plot.png"
 )
 
-#plot_gradient <- generate_feature_plot(
-#  df = df, 
-#  feature_name = feature_name, 
-#  save_path = str_replace(default_path, "xxfeaturexx", feature_name)
-#)
+plot_gradient <- generate_feature_plot(
+  df = df, 
+  feature_name = feature_name,
+  plot_title = "Maximum Ascending Gradient in Stimulus-Responsive Neurons",
+  y_axis_label = "Max Gradient [z-score/s]",
+  p_within_group = FALSE,
+  save_path = str_replace(default_path, "xxfeaturexx", feature_name)
+)
