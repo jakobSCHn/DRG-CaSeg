@@ -7,6 +7,7 @@ import matplotlib.gridspec as gridspec
 
 from scipy.ndimage import binary_erosion, affine_transform
 from skimage.measure import find_contours
+from scipy.stats import skew
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from pathlib import Path
 
@@ -774,6 +775,129 @@ class DRGtissueModel:
         plt.close(fig_spatial)
 
         return fig_spatial
+
+
+    def plot_statistics(
+        self,
+        save_loc: Path | str,
+        n_footprints: int
+    ):
+        """Generates a 4-panel figure showing spatial footprints, brightness statistics, 
+        summed signal traces, and their statistics.
+
+        Args:
+            save_loc (Path | str): The file path where the plot will be saved.
+            n_footprints (int): The number of footprints to process and plot.
+
+        Returns:
+            matplotlib.figure.Figure: The closed Figure object for the plot.
+        """
+        if not hasattr(self, "footprints") or self.footprints is None:
+            logger.warning("Footprints not found. Please create cellular structures first.")
+            return
+            
+        if not hasattr(self, "activities") or self.activities is None:
+            logger.warning("Activities not found. Please ensure signal traces are extracted.")
+            return
+
+        num_components = self.footprints.shape[0]
+        n_to_plot = min(n_footprints, num_components)
+        
+        img_h = self.height_px
+        img_w = self.width_px
+
+        fig, axes = plt.subplots(2, 2, figsize=(16, 12), dpi=300)
+        ax_map, ax_bright_hist, ax_trace, ax_trace_hist = axes.flatten()
+        
+        # Increased suptitle font size to maintain visual hierarchy with larger subtitles
+        fig.suptitle(f"Statistics for First {n_to_plot} Footprints", fontsize=28, fontweight="bold")
+
+        # --- Subplot 1: Footprints Mask Image ---
+        display_mask = np.zeros((img_h, img_w))
+
+        for i in range(n_to_plot):
+            footprint = self.footprints[i]
+            # Keep original values, taking the maximum where footprints overlap
+            display_mask = np.maximum(display_mask, footprint)
+
+        # Scale the mask values linearly between 0 and 255 before plotting
+        mask_min = display_mask.min()
+        mask_max = display_mask.max()
+        
+        if mask_max > mask_min:
+            display_mask = (display_mask - mask_min) / (mask_max - mask_min) * 255.0
+
+        ax_map.imshow(display_mask, cmap="viridis", interpolation="nearest")
+        ax_map.set_title("Footprint Masks", fontsize=22.5, fontweight="bold", pad=12)
+        ax_map.axis("off")
+
+        if hasattr(self, "um_per_pixel"):
+            bar_px = (100 / self.um_per_pixel)
+            scalebar = AnchoredSizeBar(
+                ax_map.transData, 
+                bar_px, 
+                "100 \u03bcm", 
+                "lower right", 
+                pad=0.5, 
+                color="white", 
+                frameon=False, 
+                size_vertical=2
+            )
+            ax_map.add_artist(scalebar)
+
+        # --- Subplot 2: Displayed Mask Values Histogram (Log Scale) ---
+        mask_vals = display_mask.flatten()
+        
+        if len(mask_vals) > 0:
+            b_skew = skew(mask_vals)
+            ax_bright_hist.hist(mask_vals, bins=50, range=(0, 255), color="lightblue", alpha=0.7, edgecolor="black", log=True)
+            ax_bright_hist.set_title("Mask Value Distribution", fontsize=22.5, fontweight="bold", pad=20)
+            ax_bright_hist.text(0.5, 0.99, f"Skewness: {b_skew:.3f}", transform=ax_bright_hist.transAxes, ha="center", va="bottom", fontsize=18)
+        else:
+            ax_bright_hist.set_title("Mask Value Distribution", fontsize=22.5, fontweight="bold", pad=20)
+            ax_bright_hist.text(0.5, 0.99, "(No valid pixels)", transform=ax_bright_hist.transAxes, ha="center", va="bottom", fontsize=18)
+            
+        ax_bright_hist.set_xlabel("Pixel Value", fontsize=10, fontweight="bold")
+        ax_bright_hist.set_ylabel("Frequency", fontsize=10, fontweight="bold")
+        ax_bright_hist.spines["top"].set_visible(False)
+        ax_bright_hist.spines["right"].set_visible(False)
+
+        # --- Subplot 3: Summed Signal Trace ---
+        selected_activities = self.activities[:n_to_plot]
+        summed_trace = np.sum(selected_activities, axis=0)
+        
+        time_axis = np.arange(len(summed_trace))
+        if hasattr(self, "fps") and self.fps:
+             time_axis = time_axis / self.fps
+             ax_trace.set_xlabel("Time (s)", fontsize=10, fontweight="bold")
+        else:
+             ax_trace.set_xlabel("Frames", fontsize=10, fontweight="bold")
+
+        ax_trace.grid(True, linestyle="--", linewidth=0.5, color="#9e9b9b", alpha=0.7)
+        ax_trace.set_axisbelow(True)
+        ax_trace.plot(time_axis, summed_trace, color="#1b5e20", linewidth=1.2)
+        ax_trace.set_title("Summed Signal Traces", fontsize=22.5, fontweight="bold", pad=12)
+        ax_trace.set_ylabel("Amplitude", fontsize=8, fontweight="bold")
+        ax_trace.spines["top"].set_visible(False)
+        ax_trace.spines["right"].set_visible(False)
+        ax_trace.tick_params(labelsize=8)
+
+        # --- Subplot 4: Trace Value Histogram ---
+        t_skew = skew(summed_trace)
+        ax_trace_hist.hist(summed_trace, bins=50, color="lightblue", alpha=0.7, edgecolor="black")
+        ax_trace_hist.set_title("Summed Trace Distribution", fontsize=22.5, fontweight="bold", pad=20)
+        ax_trace_hist.text(0.5, 0.99, f"Skewness: {t_skew:.3f}", transform=ax_trace_hist.transAxes, ha="center", va="bottom", fontsize=18)
+        ax_trace_hist.set_xlabel("Summed Trace Amplitude", fontsize=10, fontweight="bold")
+        ax_trace_hist.set_ylabel("Frequency", fontsize=10, fontweight="bold")
+        ax_trace_hist.spines["top"].set_visible(False)
+        ax_trace_hist.spines["right"].set_visible(False)
+
+        # Finalize and save
+        fig.tight_layout()
+        fig.savefig(save_loc, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+
+        return fig
     
 
     def perturb_positions(

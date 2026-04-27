@@ -13,7 +13,6 @@ import cv2
 import math
 import caiman as cm
 import matplotlib.gridspec as gridspec
-import matplotlib.patheffects as pe
 
 from skimage.measure import find_contours
 from matplotlib.patches import Patch

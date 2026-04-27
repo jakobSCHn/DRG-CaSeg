@@ -61,15 +61,24 @@ generate_feature_plot <- function(df, feature_name, plot_title, y_axis_label, p_
     summary(model)$coefficients[2, "Pr(>|t|)"]
   }
   
+  # Formatting helper for p-values
+  format_p <- function(p_val) {
+    if (p_val < 0.001) {
+      return("p < 0.001")
+    } else {
+      return(paste0("p = ", round(p_val, 3)))
+    }
+  }
+  
   # Standard Between-Group P-values
   p_values <- data.frame(
     stimulus = c("Capsaicin 100 nM", "KCl 50 mM", "KCl 75 mM"),
     x_min = c(1 - 0.2, 2 - 0.2, 3 - 0.2), 
     x_max = c(1 + 0.2, 2 + 0.2, 3 + 0.2), 
     p_label = c(
-      paste0("p = ", round(get_p(model_cap), 3)),
-      paste0("p = ", round(get_p(model_kcl_low), 3)),
-      paste0("p = ", round(get_p(model_kcl_high), 3))
+      format_p(get_p(model_cap)),
+      format_p(get_p(model_kcl_low)),
+      format_p(get_p(model_kcl_high))
     ),
     y_pos = max_val + (y_range * 0.08) 
   )
@@ -102,10 +111,10 @@ generate_feature_plot <- function(df, feature_name, plot_title, y_axis_label, p_
     )
     
     p_within$p_label <- c(
-      paste0("p = ", round(get_within_p(grp1, "Capsaicin 100 nM", "KCl 50 mM"), 3)),
-      paste0("p = ", round(get_within_p(grp2, "Capsaicin 100 nM", "KCl 50 mM"), 3)),
-      paste0("p = ", round(get_within_p(grp1, "KCl 50 mM", "KCl 75 mM"), 3)),
-      paste0("p = ", round(get_within_p(grp2, "KCl 50 mM", "KCl 75 mM"), 3))
+      format_p(get_within_p(grp1, "Capsaicin 100 nM", "KCl 50 mM")),
+      format_p(get_within_p(grp2, "Capsaicin 100 nM", "KCl 50 mM")),
+      format_p(get_within_p(grp1, "KCl 50 mM", "KCl 75 mM")),
+      format_p(get_within_p(grp2, "KCl 50 mM", "KCl 75 mM"))
     )
   }
   
@@ -240,7 +249,12 @@ plot_sample_correlations <- function(df, save_path = NULL) {
       stimulus_name = str_replace_all(stimulus_name, "_", " "),
       
       # Capitalize ONLY the first letter so scientific units like "nM" and "mM" are preserved
-      stimulus_name = paste0(toupper(substr(stimulus_name, 1, 1)), substr(stimulus_name, 2, nchar(stimulus_name)))
+      stimulus_name = paste0(toupper(substr(stimulus_name, 1, 1)), substr(stimulus_name, 2, nchar(stimulus_name))),
+      
+      # Added spaces before units
+      stimulus_name = str_replace(stimulus_name, "100nM", "100 nM"),
+      stimulus_name = str_replace(stimulus_name, "50mM", "50 mM"),
+      stimulus_name = str_replace(stimulus_name, "75mM", "75 mM")
     ) %>%
     drop_na(correlation_value)
   
@@ -406,10 +420,15 @@ plot_responder_proportions <- function(df, save_path = NULL) {
       stimulus = str_replace(stimulus, "stimulus_", ""),
       stimulus = str_replace(stimulus, "_has_peak", ""),
       stimulus = str_replace_all(stimulus, "_", " "),
-      stimulus = str_replace(stimulus, "capsaicin", "Capsaicin")
+      stimulus = str_replace(stimulus, "capsaicin", "Capsaicin"),
+      # Added spaces before units
+      stimulus = str_replace(stimulus, "100nM", "100 nM"),
+      stimulus = str_replace(stimulus, "50mM", "50 mM"),
+      stimulus = str_replace(stimulus, "75mM", "75 mM")
     ) %>%
     drop_na(responded) %>%
-    mutate(stimulus = factor(stimulus, levels = c("Capsaicin 100nM", "KCl 50mM", "KCl 75mM")))
+    # Updated levels to include the space
+    mutate(stimulus = factor(stimulus, levels = c("Capsaicin 100 nM", "KCl 50 mM", "KCl 75 mM")))
   
   # --- 3. Calculate Global N for Control and Treatment ---
   legend_n <- df_long %>%
@@ -579,7 +598,7 @@ df$group <- as.factor(df$group)
 df$sample_id <- as.factor(df$sample_id)
 
 
-feature_name <- "max_gradient"
+feature_name <- "peak_time"
 default_path <- "/home/jaschneider/projects/DRG-CaSeg/bio_analysis_plots/r_plots/xxfeaturexx_plot.png"
 
 responder_proportion_plot <- plot_responder_proportions(
@@ -595,8 +614,8 @@ corr_plot <- plot_sample_correlations(
 plot_gradient <- generate_feature_plot(
   df = df, 
   feature_name = feature_name,
-  plot_title = "Maximum Ascending Gradient in Stimulus-Responsive Neurons",
-  y_axis_label = "Max Gradient [z-score/s]",
+  plot_title = "Latency of Peak Amplitude in Stimulus-Responsive Neurons after Stimulation",
+  y_axis_label = "Latency [s]",
   p_within_group = FALSE,
   save_path = str_replace(default_path, "xxfeaturexx", feature_name)
 )
