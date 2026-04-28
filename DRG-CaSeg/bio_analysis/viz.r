@@ -593,6 +593,128 @@ plot_responder_proportions <- function(df, save_path = NULL) {
   return(p)
 }
 
+export_summary_statistics <- function(df, save_path) {
+  
+  # Initialize a list to hold dataframes for each feature
+  stats_list <- list()
+  
+  # --- 1. Clean Group Column ---
+  df <- df %>%
+    mutate(group = str_replace(as.character(group), "Cytokine", "Treatment"))
+  
+  # --- 2. Process Standard Features ---
+  features_to_calc <- c("max_height", "peak_time", "gradient_time", "max_gradient")
+  
+  for (feat in features_to_calc) {
+    col_cap <- paste0("stimulus_capsaicin_100nM_", feat)
+    col_kcl_low <- paste0("stimulus_KCl_50mM_", feat)
+    col_kcl_high <- paste0("stimulus_KCl_75mM_", feat)
+    
+    req_cols <- c(col_cap, col_kcl_low, col_kcl_high)
+    existing_cols <- req_cols[req_cols %in% names(df)]
+    
+    if (length(existing_cols) > 0) {
+      temp_df <- df
+      
+      # Mirror the conditional time-shift logic from your plotting function
+      if (grepl("time", feat, ignore.case = TRUE)) {
+        if (col_cap %in% names(temp_df)) temp_df[[col_cap]] <- temp_df[[col_cap]] - 100
+        if (col_kcl_low %in% names(temp_df)) temp_df[[col_kcl_low]] <- temp_df[[col_kcl_low]] - 200
+        if (col_kcl_high %in% names(temp_df)) temp_df[[col_kcl_high]] <- temp_df[[col_kcl_high]] - 300
+      }
+      
+      stat_df <- temp_df %>%
+        select(group, all_of(existing_cols)) %>%
+        pivot_longer(cols = all_of(existing_cols), names_to = "stimulus", values_to = "value") %>%
+        mutate(
+          # Clean labels to match plots nicely
+          stimulus = str_replace(stimulus, paste0("_", feat), ""),
+          stimulus = str_replace(stimulus, "stimulus_", ""),
+          stimulus = str_replace_all(stimulus, "_", " "),
+          stimulus = str_replace(stimulus, "capsaicin", "Capsaicin"),
+          stimulus = str_replace(stimulus, "100nM", "100 nM"),
+          stimulus = str_replace(stimulus, "50mM", "50 mM"),
+          stimulus = str_replace(stimulus, "75mM", "75 mM")
+        ) %>%
+        drop_na(value) %>%
+        group_by(stimulus, group) %>%
+        summarize(
+          mean_val = mean(value, na.rm = TRUE),
+          std_val = sd(value, na.rm = TRUE),
+          .groups = "drop"
+        )
+      
+      stats_list[[feat]] <- stat_df
+    }
+  }
+  
+  # --- 3. Process Correlation Features ---
+  sync_cols <- grep("corr", names(df), value = TRUE)
+  if (length(sync_cols) > 0) {
+    
+    # Replicate the sample-level collapse from plot_sample_correlations
+    df_sample <- df %>%
+      group_by(sample_id, group) %>%
+      summarize(across(all_of(sync_cols), ~ mean(.x, na.rm = TRUE)), .groups = "drop")
+    
+    corr_stats <- df_sample %>%
+      pivot_longer(cols = all_of(sync_cols), names_to = "stimulus", values_to = "value") %>%
+      mutate(
+        # Mirror the label cleaning exactly
+        stimulus = str_replace(stimulus, "sample_corr_", ""),
+        stimulus = str_replace(stimulus, "stimulus_corr_", ""),
+        stimulus = str_replace(stimulus, "stimulus_", ""),
+        stimulus = str_replace_all(stimulus, "_", " "),
+        stimulus = paste0(toupper(substr(stimulus, 1, 1)), substr(stimulus, 2, nchar(stimulus))),
+        stimulus = str_replace(stimulus, "100nM", "100 nM"),
+        stimulus = str_replace(stimulus, "50mM", "50 mM"),
+        stimulus = str_replace(stimulus, "75mM", "75 mM")
+      ) %>%
+      drop_na(value) %>%
+      group_by(stimulus, group) %>%
+      summarize(
+        mean_val = mean(value, na.rm = TRUE),
+        std_val = sd(value, na.rm = TRUE),
+        .groups = "drop"
+      )
+    
+    stats_list[["correlations"]] <- corr_stats
+  }
+  
+  # --- 4. Write to a YAML text file without extra packages ---
+  file_conn <- file(save_path, open = "w")
+  
+  for (feat_name in names(stats_list)) {
+    # Top level: Feature name
+    cat(paste0(feat_name, ":\n"), file = file_conn)
+    
+    feat_data <- stats_list[[feat_name]]
+    unique_stimuli <- unique(feat_data$stimulus)
+    
+    for (stim in unique_stimuli) {
+      # Second level: Stimulus condition
+      cat(paste0("  \"", stim, "\":\n"), file = file_conn)
+      
+      stim_data <- feat_data %>% filter(stimulus == stim)
+      unique_groups <- unique(stim_data$group)
+      
+      for (grp in unique_groups) {
+        # Third level: Group (Control/Treatment)
+        cat(paste0("    \"", grp, "\":\n"), file = file_conn)
+        
+        row_data <- stim_data %>% filter(group == grp)
+        
+        # Fourth level: Mean and Std
+        cat(paste0("      mean: ", row_data$mean_val, "\n"), file = file_conn)
+        cat(paste0("      std: ", row_data$std_val, "\n"), file = file_conn)
+      }
+    }
+  }
+  
+  close(file_conn)
+  print(paste0("Successfully exported summary statistics to: ", save_path))
+}
+
 df <- read.csv("/home/jaschneider/projects/DRG-CaSeg/DRG-CaSeg/DRG-CaSeg/bio_analysis/trace_features.csv")
 df$group <- as.factor(df$group)
 df$sample_id <- as.factor(df$sample_id)
@@ -618,4 +740,9 @@ plot_gradient <- generate_feature_plot(
   y_axis_label = "Latency [s]",
   p_within_group = FALSE,
   save_path = str_replace(default_path, "xxfeaturexx", feature_name)
+)
+
+export_summary_statistics(
+  df = df, 
+  save_path = "/home/jaschneider/projects/DRG-CaSeg/bio_analysis_plots/r_plots/overall_summary_statistics.yaml"
 )

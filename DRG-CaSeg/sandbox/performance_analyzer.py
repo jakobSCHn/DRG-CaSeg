@@ -103,7 +103,7 @@ def plot_violin(
     ax.text(
         0.95, 
         0.05, 
-        f"n={n_count}", 
+        f"N={n_count}", 
         transform=ax.transAxes, 
         horizontalalignment="right", 
         verticalalignment="bottom", 
@@ -112,7 +112,7 @@ def plot_violin(
         bbox={"facecolor": "white", "edgecolor": "black", "boxstyle": "round,pad=0.4"}
     )
     
-    save_path = Path(save_path) / f"{x}_violin_plot_n_F1.png"
+    save_path = Path(save_path) / f"{x}_violin_plot_n_corr.png"
 
     plt.tight_layout()
     plt.savefig(save_path, dpi=300)
@@ -234,28 +234,16 @@ def main():
     print("\nExtracted Data Preview:")
     print(df.head())
 
-    # Example Plotting Logic (You will need to adjust the 'y' parameter)
-    # We will plot the 'spatial_fp' metric as an example
-    target_plot_metric = "spatial_fp"
     
     plot_violin(
         data=df,
         x="Param_Group",
-        y="spatial_f1_score",
+        y="temporal_mean_correlation",
         x_label=r"Number of Components",
-        y_label="F1 Score",
+        y_label="Pearson Correlation",
         title=r"Effect of Component Count on F1 Score Distribution",
         save_path="/home/jaschneider/projects/DRG-CaSeg/thesis_plots/"
     )
-    plot_metric_stability(
-        data=df,
-        metric_name="spatial_f1_score",
-        group_col="Param_Group",
-        y_label="F1 Score",
-        save_path=f"/home/jaschneider/projects/DRG-CaSeg/thesis_plots/{folder_name}",
-    )
-
-
 
 
 if __name__ == "__main__":

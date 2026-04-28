@@ -1021,6 +1021,7 @@ class DRGtissueModel:
     def plot_traces(
         self,
         save_loc: Path | str,
+        separate_gt: bool = False,
         ):
         """Plots the extracted noisy traces against the ground truth activities."""
         if not hasattr(self, "noisy_activities") or self.noisy_activities is None:
@@ -1041,13 +1042,16 @@ class DRGtissueModel:
         else:
             colors = cm.get_cmap("nipy_spectral")(np.linspace(0, 1, num_components))
 
+        # Determine total subplots needed based on the separate_gt flag
+        total_subplots = (num_trace_rois * 2) if (separate_gt and gt_trace_subset is not None) else num_trace_rois
+
         height_per_roi = 0.5 
         header_space = 2.0
-        trace_min_height = header_space + (num_trace_rois * height_per_roi)
+        trace_min_height = header_space + (total_subplots * height_per_roi)
         fig_height = max(8.0, trace_min_height)
 
         fig_temporal = plt.figure(figsize=(10, fig_height), dpi=300)
-        gs = gridspec.GridSpec(max(1, num_trace_rois), 1, figure=fig_temporal, hspace=0.5)
+        gs = gridspec.GridSpec(max(1, total_subplots), 1, figure=fig_temporal, hspace=0.5)
         
         title_y_pos = 1.0 - (0.3 / fig_height)
         fig_temporal.suptitle("Temporal Activity", fontsize=20, fontweight="bold", y=title_y_pos)
@@ -1059,12 +1063,6 @@ class DRGtissueModel:
         axes_traces.append(ax_first)
 
         for i in range(num_trace_rois):
-            if i == 0:
-                ax_trace = ax_first
-            else:
-                ax_trace = fig_temporal.add_subplot(gs[i, 0], sharex=ax_first)
-                axes_traces.append(ax_trace)
-            
             trace_plot = trace_subset[i]
             
             if gt_trace_subset is not None:
@@ -1073,27 +1071,58 @@ class DRGtissueModel:
             else:
                 trace_plot_gt = None
             
-            if trace_plot_gt is not None:
-                ax_trace.plot(time_seconds, trace_plot_gt, color="#000000", linewidth=1.2)
+            # Determine axis assignments and formatting parameters based on toggle
+            if separate_gt and trace_plot_gt is not None:
+                if i == 0:
+                    ax_trace = ax_first
+                else:
+                    ax_trace = fig_temporal.add_subplot(gs[2*i, 0], sharex=ax_first)
+                    axes_traces.append(ax_trace)
                 
-            ax_trace.plot(time_seconds, trace_plot, color=colors[i], linewidth=1.2)
-            ax_trace.grid(True, linestyle="--", linewidth=0.5, color="#9e9b9b", alpha=0.5)
-            ax_trace.set_axisbelow(True)
-
-            ax_trace.text(0.01, 0.85, f"ROI {i}", transform=ax_trace.transAxes, fontsize=10, fontweight="bold", color="black")
-
-            ax_trace.yaxis.set_major_locator(plt.MaxNLocator(nbins=3, prune="both"))
-            ax_trace.tick_params(axis="y", labelsize=7)
-
-            ax_trace.spines["top"].set_visible(False)
-            ax_trace.spines["right"].set_visible(False)
-            
-            if i < num_trace_rois - 1:
-                ax_trace.tick_params(labelbottom=False, bottom=True) 
-                ax_trace.spines["bottom"].set_visible(True) 
+                ax_gt = fig_temporal.add_subplot(gs[2*i + 1, 0], sharex=ax_first)
+                axes_traces.append(ax_gt)
+                
+                axes_to_format = [
+                    (ax_trace, trace_plot, colors[i], f"ROI {i} (Trace)", False),
+                    (ax_gt, trace_plot_gt, "#000000", f"ROI {i} (GT)", i == num_trace_rois - 1)
+                ]
             else:
-                ax_trace.set_xlabel("Time (s)", fontsize=10)
-                ax_trace.tick_params(axis="x", labelsize=9)
+                if i == 0:
+                    ax_trace = ax_first
+                else:
+                    ax_trace = fig_temporal.add_subplot(gs[i, 0], sharex=ax_first)
+                    axes_traces.append(ax_trace)
+                
+                axes_to_format = [(ax_trace, None, None, f"ROI {i}", i == num_trace_rois - 1)]
+            
+            # Apply styling and plotting to the axes dynamically
+            for ax, data, color, label, is_last in axes_to_format:
+                if ax == ax_trace and not (separate_gt and trace_plot_gt is not None):
+                    # Standard combined behavior
+                    if trace_plot_gt is not None:
+                        ax.plot(time_seconds, trace_plot_gt, color="#000000", linewidth=1.2)
+                    ax.plot(time_seconds, trace_plot, color=colors[i], linewidth=1.2)
+                else:
+                    # Separated behavior plots single traces
+                    ax.plot(time_seconds, data, color=color, linewidth=1.2)
+                
+                ax.grid(True, linestyle="--", linewidth=0.5, color="#9e9b9b", alpha=0.5)
+                ax.set_axisbelow(True)
+
+                ax.text(0.01, 0.85, label, transform=ax.transAxes, fontsize=10, fontweight="bold", color="black")
+
+                ax.yaxis.set_major_locator(plt.MaxNLocator(nbins=3, prune="both"))
+                ax.tick_params(axis="y", labelsize=7)
+
+                ax.spines["top"].set_visible(False)
+                ax.spines["right"].set_visible(False)
+                
+                if not is_last:
+                    ax.tick_params(labelbottom=False, bottom=True) 
+                    ax.spines["bottom"].set_visible(True) 
+                else:
+                    ax.set_xlabel("Time (s)", fontsize=10)
+                    ax.tick_params(axis="x", labelsize=9)
 
         ax_first.set_xlim(time_seconds[0], time_seconds[-1])
         fig_temporal.align_ylabels(axes_traces)

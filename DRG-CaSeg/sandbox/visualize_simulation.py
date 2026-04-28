@@ -102,20 +102,7 @@ model.render_video()
 model.plot_ground_truth(
     save_loc="/home/jaschneider/projects/DRG-CaSeg/bio_analysis_plots/tissue_simulation_plots/many_neurons.png",
 )
-"""
 
-model = DRGtissueModel(
-    duration_s=8,
-    num_small_neurons=10,
-    num_large_neurons=30,
-    background_brightness=80,
-    full_well_capacity=15000,
-    snr=3.0,
-)
-
-vid = model.render_video(
-    store_traces=True,
-)
 vid_8bit = (vid * 255).astype(np.uint8)
 
 save_blue_timelapse(
@@ -129,4 +116,25 @@ save_blue_timelapse(
 model.plot_statistics(
     save_loc="/home/jaschneider/projects/DRG-CaSeg/bio_analysis_plots/tissue_simulation_plots/skew_viz_single.png",
     n_footprints=1,
+)
+
+"""
+
+model = DRGtissueModel(
+    duration_s=8,
+    num_small_neurons=2,
+    num_large_neurons=2,
+    background_brightness=80,
+    full_well_capacity=15000,
+    snr=0.25,
+)
+
+model.render_video(
+    store_traces=True,
+)
+
+
+model.plot_traces(
+    "/home/jaschneider/projects/DRG-CaSeg/bio_analysis_plots/tissue_simulation_plots/correlation_viz_traces.png",
+    separate_gt=True,
 )
